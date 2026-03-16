@@ -2393,7 +2393,7 @@ namespace Mesh
                         msg.from = decoded_packet.from;
                         msg.to = decoded_packet.to;
                         msg.timestamp =
-                            decoded_packet.rx_time > 0 ? decoded_packet.rx_time : (uint32_t)(esp_timer_get_time() / 1000000);
+                            decoded_packet.rx_time > 0 ? decoded_packet.rx_time : (uint32_t)time(nullptr);
                         msg.channel = decoded_packet.channel;
                         msg.is_direct = (decoded_packet.to != 0xFFFFFFFF);
                         msg.read = false; // Mark as unread
@@ -2548,7 +2548,7 @@ namespace Mesh
                                     pmsg.id = pid;
                                     pmsg.from = _config.node_id;
                                     pmsg.to = 0xFFFFFFFF;
-                                    pmsg.timestamp = (uint32_t)(esp_timer_get_time() / 1000000);
+                                    pmsg.timestamp = (uint32_t)time(nullptr);
                                     pmsg.channel = decoded_packet.channel;
                                     pmsg.is_direct = false;
                                     pmsg.read = true;
@@ -4160,7 +4160,7 @@ namespace Mesh
                 msg.id = pid;
                 msg.from = _config.node_id;
                 msg.to = 0xFFFFFFFF;
-                msg.timestamp = (uint32_t)(esp_timer_get_time() / 1000000);
+                msg.timestamp = (uint32_t)time(nullptr);
                 msg.channel = channel;
                 msg.is_direct = false;
                 msg.read = true;
@@ -4181,7 +4181,7 @@ namespace Mesh
                 msg.id = pid;
                 msg.from = _config.node_id;
                 msg.to = node_id;
-                msg.timestamp = (uint32_t)(esp_timer_get_time() / 1000000);
+                msg.timestamp = (uint32_t)time(nullptr);
                 msg.channel = channel;
                 msg.is_direct = true;
                 msg.read = true;

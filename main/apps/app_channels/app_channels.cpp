@@ -10,8 +10,8 @@
  */
 #include "app_channels.h"
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "esp_random.h"
+#include <ctime>
 #include "mbedtls/base64.h"
 #include "mesh/mesh_service.h"
 #include "apps/utils/ui/dialog.h"
@@ -369,7 +369,7 @@ void AppChannels::_send_message(const std::string& text)
         msg.id = packet_id;
         msg.from = _data.hal->mesh()->getNodeId();
         msg.to = 0xFFFFFFFF;
-        msg.timestamp = (uint32_t)(esp_timer_get_time() / 1000000);
+        msg.timestamp = (uint32_t)time(nullptr);
         msg.channel = _data.selected_channel;
         msg.is_direct = false;
         msg.read = true;

@@ -3462,7 +3462,7 @@ void AppNodes::_send_message(const std::string& text)
         msg.id = packet_id;
         msg.from = _data.hal->mesh()->getNodeId();
         msg.to = _data.selected_node_id;
-        msg.timestamp = (uint32_t)(esp_timer_get_time() / 1000000);
+        msg.timestamp = (uint32_t)time(nullptr);
         msg.channel = 0;
         msg.is_direct = true;
         msg.read = true;
