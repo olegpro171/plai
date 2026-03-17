@@ -166,6 +166,14 @@ namespace Mesh
         static bool generateKeypair(uint8_t* out_private, uint8_t* out_public);
 
         /**
+         * @brief Derive X25519 public key from an existing private key
+         * @param private_key 32-byte raw private key
+         * @param out_public Output buffer for 32-byte raw public key
+         * @return true if successful
+         */
+        static bool derivePublicFromPrivate(const uint8_t* private_key, uint8_t* out_public);
+
+        /**
          * @brief Initialize the mesh service
          * @param radio Radio interface
          * @param nodedb Node database
@@ -380,14 +388,13 @@ namespace Mesh
          * @return meshtastic_Routing_Error_NONE on success; a specific error code otherwise.
          *         Only PKI_FAILED and PKI_UNKNOWN_PUBKEY codes are meaningful to NACK back to the sender.
          */
-        meshtastic_Routing_Error decodeMeshPacket(const meshtastic_MeshPacket& packet,
-                                                  meshtastic_MeshPacket& decoded) const;
+        meshtastic_Routing_Error decodeMeshPacket(const meshtastic_MeshPacket& packet, meshtastic_MeshPacket& decoded) const;
 
         // ACK / NACK / Routing reply handling
         bool sendRouting(uint32_t to,
                          uint32_t packet_id,
-                         uint8_t  channel,
-                         uint8_t  hop_limit,
+                         uint8_t channel,
+                         uint8_t hop_limit,
                          meshtastic_Routing_Error error_code = meshtastic_Routing_Error_NONE);
         bool sendAck(uint32_t to, uint32_t packet_id, uint8_t channel, uint8_t hop_limit);
         uint8_t getHopLimitForResponse(uint8_t hop_start, uint8_t hop_limit) const;

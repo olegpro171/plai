@@ -158,15 +158,6 @@ namespace SETTINGS
         security_group.nvs_namespace = "security";
         security_group.items = {
             back_item,
-            {"public_key",
-             "Public key",
-             TYPE_STRING,
-             "",
-             "",
-             "",
-             "",
-             "X25519 public key (base64). Auto-generated if empty",
-             mesh_apply_cb},
             {"private_key",
              "Private key",
              TYPE_STRING,
@@ -175,6 +166,75 @@ namespace SETTINGS
              "",
              "",
              "X25519 private key (base64). Auto-generated if empty",
+             mesh_apply_cb},
+            {"derive_key",
+             "Derive public key...",
+             TYPE_CALLBACK,
+             "",
+             "",
+             "",
+             "",
+             "Derive public key from private key",
+             [this](SettingItem_t& item)
+             {
+                 if (_hal)
+                 {
+                     bool confirm = UTILS::UI::show_confirmation_dialog(_hal,
+                                                                        "Confirm",
+                                                                        "Derive public key from private key?",
+                                                                        "Yes",
+                                                                        "No");
+                     if (!confirm)
+                         return;
+                 }
+                 std::string priv_b64 = getString("security", "private_key");
+                 if (priv_b64.empty())
+                 {
+                     if (_hal)
+                         UTILS::UI::show_error_dialog(_hal, "Error", "No private key in settings", "OK");
+                     return;
+                 }
+                 uint8_t priv_key[32];
+                 size_t priv_len = 0;
+                 if (mbedtls_base64_decode(priv_key, 32, &priv_len, (const unsigned char*)priv_b64.c_str(), priv_b64.size()) !=
+                         0 ||
+                     priv_len != 32)
+                 {
+                     if (_hal)
+                         UTILS::UI::show_error_dialog(_hal, "Error", "Invalid private key", "OK");
+                     return;
+                 }
+                 uint8_t pub_key[32];
+                 bool ok = Mesh::MeshService::derivePublicFromPrivate(priv_key, pub_key);
+                 if (ok)
+                 {
+                     unsigned char b64[48] = {};
+                     size_t b64_len = 0;
+                     if (mbedtls_base64_encode(b64, sizeof(b64), &b64_len, pub_key, 32) == 0)
+                     {
+                         setString("security", "public_key", std::string((char*)b64, b64_len));
+                         applyMeshConfig(item);
+                     }
+                     else
+                     {
+                         if (_hal)
+                             UTILS::UI::show_error_dialog(_hal, "Error", "Failed to encode public key", "OK");
+                     }
+                 }
+                 else
+                 {
+                     if (_hal)
+                         UTILS::UI::show_error_dialog(_hal, "Error", "Failed to derive public key", "OK");
+                 }
+             }},
+            {"public_key",
+             "Public key",
+             TYPE_STRING,
+             "",
+             "",
+             "",
+             "",
+             "X25519 public key (base64). Auto-generated if empty",
              mesh_apply_cb},
             {"regen_keys",
              "Regenerate keys...",

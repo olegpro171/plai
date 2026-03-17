@@ -3394,6 +3394,56 @@ namespace Mesh
         return gen_ok;
     }
 
+    bool MeshService::derivePublicFromPrivate(const uint8_t* private_key, uint8_t* out_public)
+    {
+        if (!private_key || !out_public)
+            return false;
+        mbedtls_ecp_group grp;
+        mbedtls_mpi d;
+        mbedtls_ecp_point Q;
+
+        mbedtls_ecp_group_init(&grp);
+        mbedtls_mpi_init(&d);
+        mbedtls_ecp_point_init(&Q);
+
+        bool ok = false;
+        if (mbedtls_ecp_group_load(&grp, MBEDTLS_ECP_DP_CURVE25519) != 0)
+        {
+            ESP_LOGE(TAG, "derivePublic: ecp_group_load failed");
+            goto cleanup;
+        }
+        if (mbedtls_mpi_read_binary_le(&d, private_key, 32) != 0)
+        {
+            ESP_LOGE(TAG, "derivePublic: failed to load private key");
+            goto cleanup;
+        }
+        if (mbedtls_ecp_mul(&grp, &Q, &d, &grp.MBEDTLS_PRIVATE(G), esp_rng_cb, nullptr) != 0)
+        {
+            ESP_LOGE(TAG, "derivePublic: ecp_mul failed");
+            goto cleanup;
+        }
+        mbedtls_mpi inv_z;
+        mbedtls_mpi_init(&inv_z);
+        if (mbedtls_mpi_cmp_int(&Q.MBEDTLS_PRIVATE(Z), 1) != 0)
+        {
+            mbedtls_mpi_inv_mod(&inv_z, &Q.MBEDTLS_PRIVATE(Z), &grp.P);
+            mbedtls_mpi_mul_mpi(&Q.MBEDTLS_PRIVATE(X), &Q.MBEDTLS_PRIVATE(X), &inv_z);
+            mbedtls_mpi_mod_mpi(&Q.MBEDTLS_PRIVATE(X), &Q.MBEDTLS_PRIVATE(X), &grp.P);
+            mbedtls_mpi_lset(&Q.MBEDTLS_PRIVATE(Z), 1);
+        }
+        mbedtls_mpi_free(&inv_z);
+        memset(out_public, 0, 32);
+        if (mbedtls_mpi_write_binary_le(&Q.MBEDTLS_PRIVATE(X), out_public, 32) == 0)
+            ok = true;
+        else
+            ESP_LOGE(TAG, "derivePublic: failed to write public key");
+    cleanup:
+        mbedtls_ecp_point_free(&Q);
+        mbedtls_mpi_free(&d);
+        mbedtls_ecp_group_free(&grp);
+        return ok;
+    }
+
     void MeshService::initRegion()
     {
         const RegionInfo* r = regions;
