@@ -1130,8 +1130,8 @@ namespace UTILS
 
                 need_update |= hl_text_render(&hint_ctx,
                                               "[\u2191][\u2193][\u2190][\u2192] [DEL] [ESC] [ENTER]",
-                                              0,
-                                              hal->canvas()->height() - 12,
+                                              5,
+                                              hal->canvas()->height() - 9,
                                               TFT_DARKGREY,
                                               TFT_WHITE,
                                               THEME_COLOR_BG);
