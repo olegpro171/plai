@@ -345,6 +345,7 @@ Plai/
 
 - Fonts: [efont](https://openlab.ring.gr.jp/efont/) Unicode bitmap fonts from the Linux distribution
 - Icons: Free icons by [Icons8](https://icons8.com)
+- Sounds: [Epidemic Sound](https://www.epidemicsound.com/)
 - Platform: [M5Stack](https://m5stack.com/) M5Cardputer
 
 ## License
