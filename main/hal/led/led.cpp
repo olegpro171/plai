@@ -91,8 +91,9 @@ namespace HAL
     }
 
     LED::LED(int gpio_num)
-        : _initialized(false), _gpio_num(gpio_num), _led_chan(nullptr), _encoder(nullptr), _timer(nullptr), _mutex(nullptr),
-          _mode(LEDMode::OFF), _color(), _param1(0), _param2(0), _param3(0), _param4(0), _pattern_step(0), _fade_step(0)
+        : _initialized(false), _suspended(false), _gpio_num(gpio_num), _led_chan(nullptr), _encoder(nullptr), _timer(nullptr),
+          _mutex(nullptr), _mode(LEDMode::OFF), _color(), _param1(0), _param2(0), _param3(0), _param4(0), _pattern_step(0),
+          _fade_step(0)
     {
         memset(_led_pixel, 0, sizeof(_led_pixel));
         init();
@@ -252,7 +253,7 @@ namespace HAL
 
     void LED::update_led()
     {
-        if (!check_initialized())
+        if (!check_initialized() || _suspended)
         {
             return;
         }
@@ -627,6 +628,53 @@ namespace HAL
     {
         // off() already has mutex protection
         return off();
+    }
+
+    void LED::suspend()
+    {
+        if (!_initialized || _suspended)
+            return;
+
+        if (xSemaphoreTake(_mutex, portMAX_DELAY) != pdTRUE)
+            return;
+
+        stop_timer();
+        set_pixel_off();
+        update_led();
+
+        rmt_disable(_led_chan);
+        _suspended = true;
+
+        xSemaphoreGive(_mutex);
+        ESP_LOGI(TAG, "LED suspended (RMT disabled)");
+    }
+
+    void LED::resume()
+    {
+        if (!_initialized || !_suspended)
+            return;
+
+        if (xSemaphoreTake(_mutex, portMAX_DELAY) != pdTRUE)
+            return;
+
+        rmt_enable(_led_chan);
+        _suspended = false;
+
+        // Restart pattern if one was active
+        if (_mode != LEDMode::OFF && _mode != LEDMode::CONSTANT)
+        {
+            _pattern_step = 0;
+            _fade_step = 0;
+            start_timer(1000);
+        }
+        else if (_mode == LEDMode::CONSTANT)
+        {
+            set_pixel_color(_color);
+            update_led();
+        }
+
+        xSemaphoreGive(_mutex);
+        ESP_LOGI(TAG, "LED resumed (RMT enabled)");
     }
 
 } // namespace HAL

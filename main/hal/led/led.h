@@ -120,6 +120,18 @@ namespace HAL
          */
         bool stop();
 
+        /**
+         * @brief Suspend RMT to release PM lock for light sleep.
+         * Saves current pattern state, turns off LED, disables RMT channel.
+         */
+        void suspend();
+
+        /**
+         * @brief Resume RMT after light sleep, re-enabling the channel.
+         * Restores the pattern that was active before suspend.
+         */
+        void resume();
+
     private:
         // RMT encoder callback
         static size_t ws2812_encoder_callback(const void* data,
@@ -144,6 +156,7 @@ namespace HAL
 
         // State variables
         bool _initialized;
+        bool _suspended;
         int _gpio_num;
         rmt_channel_handle_t _led_chan;
         rmt_encoder_handle_t _encoder;
