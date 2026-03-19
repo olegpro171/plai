@@ -103,7 +103,7 @@ extern "C" void app_main(void)
         if (hal.isDisplaySleeping())
         {
             hal.keyboard()->updateKeyList();
-            xTaskNotifyWait(0, UINT32_MAX, NULL, pdMS_TO_TICKS(1000));
+            xTaskNotifyWait(0, UINT32_MAX, NULL, pdMS_TO_TICKS(hal.hasPendingTx() ? 1 : 1000));
         }
         else
         {

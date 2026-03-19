@@ -86,6 +86,7 @@ namespace HAL
          * @brief Update mesh service (call from main loop)
          */
         void updateMesh() override;
+        bool hasPendingTx() override;
 
 #if HAL_USE_SPEAKER
         void playErrorSound() override { _speaker->playWav(error_wav_start, error_wav_end - error_wav_start); }

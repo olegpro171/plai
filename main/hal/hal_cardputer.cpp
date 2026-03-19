@@ -528,6 +528,11 @@ void HalCardputer::updateMesh()
     }
 }
 
+bool HalCardputer::hasPendingTx()
+{
+    return _mesh && _mesh->getRouter().hasTxPackets();
+}
+
 #if HAL_USE_BAT
 uint8_t HalCardputer::getBatLevel(float voltage)
 {

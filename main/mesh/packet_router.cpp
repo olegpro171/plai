@@ -400,7 +400,8 @@ namespace Mesh
         return true;
     }
 
-    bool PacketRouter::enqueueTxRaw(const uint8_t* data, uint8_t len, PacketPriority priority, uint8_t port_hint)
+    bool PacketRouter::enqueueTxRaw(
+        const uint8_t* data, uint8_t len, PacketPriority priority, uint8_t port_hint, uint32_t not_before_ms)
     {
         if (!data || len == 0 || len > MAX_LORA_PAYLOAD)
             return false;
@@ -428,9 +429,12 @@ namespace Mesh
         qp.port_hint = port_hint;
         qp.retries_left = 0;
         qp.tx_time_ms = millis();
+        qp.not_before_ms = not_before_ms;
 
         return xQueueSend(_tx_queue, &qp, pdMS_TO_TICKS(100)) == pdTRUE;
     }
+
+    bool PacketRouter::peekTx(QueuedPacket& packet) const { return xQueuePeek(_tx_queue, &packet, 0) == pdTRUE; }
 
     bool PacketRouter::dequeueTx(QueuedPacket& packet) { return xQueueReceive(_tx_queue, &packet, 0) == pdTRUE; }
 

@@ -257,5 +257,6 @@ namespace HAL
 #endif
         virtual void reboot() {}
         virtual void updateMesh() {}
+        virtual bool hasPendingTx() { return false; }
     };
 } // namespace HAL

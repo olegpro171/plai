@@ -454,7 +454,7 @@ namespace Mesh
           _fromradio_channel_index(0), _last_nodeinfo_broadcast_ms(0), _force_nodeinfo_broadcast(false),
           _last_position_broadcast_ms(0), _last_telemetry_broadcast_ms(0), _tx_in_progress(false), _last_tx_start_ms(0),
           _last_rx_rssi(0), _last_rx_snr(0.0f), _airtime_window_start_ms(0), _airtime_tx_ms(0), _airtime_rx_ms(0),
-          _airtime_tx_ms_prev(0), _airtime_rx_ms_prev(0)
+          _airtime_tx_ms_prev(0), _airtime_rx_ms_prev(0), _slot_time_ms(28)
     {
         _hal = hal;
         memset(&_config, 0, sizeof(_config));
@@ -622,7 +622,11 @@ namespace Mesh
         if (_router.hasTxPackets() && _radio && !_radio->isBusy())
         {
             QueuedPacket qp;
-            if (_router.dequeueTx(qp))
+            if (_router.peekTx(qp) && qp.not_before_ms != 0 && now < qp.not_before_ms)
+            {
+                // Front packet has a deferred send time, skip this cycle
+            }
+            else if (_router.dequeueTx(qp))
             {
                 ESP_LOGD(TAG, "Transmitting packet, %d bytes", qp.raw_len);
                 if (_radio->transmit(qp.raw_data, qp.raw_len))
@@ -707,6 +711,41 @@ namespace Mesh
 
         // Check for timed-out pending ACKs
         checkPendingAcks();
+    }
+
+    uint32_t MeshService::computeSlotTimeMsec() const
+    {
+        // Meshtastic-compatible slot time: time to detect a transmission has started
+        // = CAD duration + propagation + Tx/Rx turnaround + MAC processing
+        float prop_turnaround_mac_ms = 0.2f + 0.4f + 7.0f; // 7.6 ms
+        float symbol_time_ms = (float)(1u << _sf) / _bw;    // 2^sf / bw_kHz
+
+        if (_my_region && _my_region->wide_lora)
+        {
+            // 2.4 GHz CAD duration (AN1200.22 of SX1280)
+            return (uint32_t)((4 + (2 * _sf + 3) / 32) * symbol_time_ms + prop_turnaround_mac_ms);
+        }
+        // Sub-GHz: CAD = max(2.25, NUM_SYM_CAD + 0.5) symbols, NUM_SYM_CAD = 2
+        float cad_symbols = 2.5f; // max(2.25, 2 + 0.5)
+        return (uint32_t)(cad_symbols * symbol_time_ms + prop_turnaround_mac_ms);
+    }
+
+    uint32_t MeshService::getTxDelayMsec() const
+    {
+        // Meshtastic-compatible CSMA/CA delay: random(0, 2^CWsize) * slotTime
+        // CWsize is scaled by channel utilization: low util → small CW, high util → large CW
+        float channel_util = _getChannelUtilization();
+        uint8_t cw_size = CW_MIN + (uint8_t)(channel_util * (CW_MAX - CW_MIN) / 100.0f);
+        if (cw_size > CW_MAX)
+            cw_size = CW_MAX;
+        uint32_t cw_slots = 1u << cw_size; // 2^CWsize
+        return (esp_random() % cw_slots) * _slot_time_ms;
+    }
+
+    uint32_t MeshService::getReplyNotBefore() const
+    {
+        uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        return now + getTxDelayMsec();
     }
 
     void MeshService::checkPendingAcks()
@@ -1884,7 +1923,7 @@ namespace Mesh
                  decode_err == meshtastic_Routing_Error_PKI_FAILED))
             {
                 uint8_t hop_limit = getHopLimitForResponse(packet.hop_start, packet.hop_limit);
-                sendRouting(packet.from, packet.id, packet.channel, hop_limit, decode_err);
+                sendRouting(packet.from, packet.id, packet.channel, hop_limit, decode_err, getReplyNotBefore());
             }
         }
 
@@ -2154,7 +2193,7 @@ namespace Mesh
                     if (decoded_packet.want_ack && decoded_packet.to != 0xFFFFFFFF)
                     {
                         uint8_t ack_hop_limit = getHopLimitForResponse(decoded_packet.hop_start, decoded_packet.hop_limit);
-                        sendAck(decoded_packet.from, decoded_packet.id, decoded_packet.channel, ack_hop_limit);
+                        sendAck(decoded_packet.from, decoded_packet.id, decoded_packet.channel, ack_hop_limit, getReplyNotBefore());
                     }
 
                     // Process #invite DM: create a channel from invitation
@@ -2543,8 +2582,7 @@ namespace Mesh
             }
 
             ESP_LOGI(TAG, "Responding to NodeInfo request from 0x%08lx", (unsigned long)packet.from);
-            // Send our NodeInfo back to the requester (don't request a response back)
-            sendNodeInfo(packet.from, packet.channel, false);
+            sendNodeInfo(packet.from, packet.channel, false, getReplyNotBefore());
         }
     }
 
@@ -2601,7 +2639,7 @@ namespace Mesh
                 return;
             }
             ESP_LOGI(TAG, "Responding to Position request from 0x%08lx channel %d", (unsigned long)packet.from, packet.channel);
-            sendPosition(packet.from, packet.channel);
+            sendPosition(packet.from, packet.channel, false, getReplyNotBefore());
         }
     }
 
@@ -2840,7 +2878,7 @@ namespace Mesh
             memcpy(radio_buf + sizeof(header), payload, payload_len);
             const size_t radio_len = sizeof(header) + payload_len;
 
-            if (_router.enqueueTxRaw(radio_buf, (uint8_t)radio_len, PacketPriority::DEFAULT, meshtastic_PortNum_TRACEROUTE_APP))
+            if (_router.enqueueTxRaw(radio_buf, (uint8_t)radio_len, PacketPriority::DEFAULT, meshtastic_PortNum_TRACEROUTE_APP, getReplyNotBefore()))
             {
                 ESP_LOGI(TAG, "TraceRoute response sent to 0x%08lX", (unsigned long)packet.from);
             }
@@ -3398,6 +3436,9 @@ namespace Mesh
                  (unsigned long)numChannels);
 
         _radio->setConfig(config);
+
+        _slot_time_ms = computeSlotTimeMsec();
+        ESP_LOGI(TAG, "Slot time: %lu ms", (unsigned long)_slot_time_ms);
     }
 
     uint32_t MeshService::generateNodeId()
@@ -3425,7 +3466,7 @@ namespace Mesh
         sendNodeInfo(0xFFFFFFFF, 0, false);
     }
 
-    void MeshService::sendNodeInfo(uint32_t dest, uint8_t channel, bool want_response)
+    void MeshService::sendNodeInfo(uint32_t dest, uint8_t channel, bool want_response, uint32_t not_before_ms)
     {
         if (!_nodedb)
         {
@@ -3573,7 +3614,7 @@ namespace Mesh
 
         // Enqueue for transmission (raw on-air packet)
         PacketPriority priority = is_broadcast ? PacketPriority::BACKGROUND : PacketPriority::DEFAULT;
-        if (_router.enqueueTxRaw(radio_buf, (uint8_t)radio_len, priority, meshtastic_PortNum_NODEINFO_APP))
+        if (_router.enqueueTxRaw(radio_buf, (uint8_t)radio_len, priority, meshtastic_PortNum_NODEINFO_APP, not_before_ms))
         {
             if (is_broadcast)
             {
@@ -3621,7 +3662,7 @@ namespace Mesh
         return false;
     }
 
-    bool MeshService::sendPosition(uint32_t dest, uint8_t channel, bool want_response)
+    bool MeshService::sendPosition(uint32_t dest, uint8_t channel, bool want_response, uint32_t not_before_ms)
     {
         meshtastic_Position position = meshtastic_Position_init_default;
         bool has_position = false;
@@ -3834,7 +3875,7 @@ namespace Mesh
 
         // 6. Enqueue for transmission
         PacketPriority priority = is_broadcast ? PacketPriority::BACKGROUND : PacketPriority::DEFAULT;
-        if (_router.enqueueTxRaw(radio_buf, (uint8_t)radio_len, priority, meshtastic_PortNum_POSITION_APP))
+        if (_router.enqueueTxRaw(radio_buf, (uint8_t)radio_len, priority, meshtastic_PortNum_POSITION_APP, not_before_ms))
         {
             ESP_LOGI(TAG, "Position packet queued to 0x%08lX (%lu bytes)", (unsigned long)dest, radio_len);
             return true;
@@ -4195,7 +4236,8 @@ namespace Mesh
     }
 
     bool MeshService::sendRouting(
-        uint32_t to, uint32_t packet_id, uint8_t channel, uint8_t hop_limit, meshtastic_Routing_Error error_code)
+        uint32_t to, uint32_t packet_id, uint8_t channel, uint8_t hop_limit, meshtastic_Routing_Error error_code,
+        uint32_t not_before_ms)
     {
         const bool is_ack = (error_code == meshtastic_Routing_Error_NONE);
         if (is_ack)
@@ -4315,7 +4357,7 @@ namespace Mesh
         size_t radio_len = sizeof(header) + encrypted_len;
 
         // Send with high priority (routing replies are time-sensitive)
-        if (_router.enqueueTxRaw(radio_buf, (uint8_t)radio_len, PacketPriority::ACK, meshtastic_PortNum_ROUTING_APP))
+        if (_router.enqueueTxRaw(radio_buf, (uint8_t)radio_len, PacketPriority::ACK, meshtastic_PortNum_ROUTING_APP, not_before_ms))
         {
             ESP_LOGI(TAG, "Routing reply sent to 0x%08lX (error=%d)", (unsigned long)to, (int)error_code);
             return true;
@@ -4327,9 +4369,9 @@ namespace Mesh
         }
     }
 
-    bool MeshService::sendAck(uint32_t to, uint32_t packet_id, uint8_t channel, uint8_t hop_limit)
+    bool MeshService::sendAck(uint32_t to, uint32_t packet_id, uint8_t channel, uint8_t hop_limit, uint32_t not_before_ms)
     {
-        return sendRouting(to, packet_id, channel, hop_limit, meshtastic_Routing_Error_NONE);
+        return sendRouting(to, packet_id, channel, hop_limit, meshtastic_Routing_Error_NONE, not_before_ms);
     }
 
     static meshtastic_Config_DeviceConfig_Role roleFromName(const std::string& name)
