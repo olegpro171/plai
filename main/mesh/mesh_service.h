@@ -56,6 +56,39 @@ namespace Mesh
         const char* name;         // Region name
     };
 
+    struct ModemPresetInfo
+    {
+        meshtastic_Config_LoRaConfig_ModemPreset preset;
+        const char* name;
+        const char* short_name;
+        float bw;
+        float bw_wide;
+        uint8_t cr;
+        uint8_t sf;
+    };
+
+    static constexpr size_t MODEM_PRESET_COUNT = 10;
+    extern const ModemPresetInfo modem_presets[MODEM_PRESET_COUNT];
+
+    inline const ModemPresetInfo* getModemPresetInfo(int index)
+    {
+        if (index < 0 || index >= (int)MODEM_PRESET_COUNT)
+            return nullptr;
+        return &modem_presets[index];
+    }
+
+    inline const char* getPresetName(meshtastic_Config_LoRaConfig_ModemPreset preset)
+    {
+        const ModemPresetInfo* info = getModemPresetInfo(static_cast<int>(preset));
+        return info ? info->name : "Invalid";
+    }
+
+    inline const char* getPresetShortName(meshtastic_Config_LoRaConfig_ModemPreset preset)
+    {
+        const ModemPresetInfo* info = getModemPresetInfo(static_cast<int>(preset));
+        return info ? info->short_name : "?";
+    }
+
     /**
      * @brief Mesh service state
      */

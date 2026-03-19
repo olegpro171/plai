@@ -92,6 +92,21 @@ namespace Mesh
                                          RDEF(PH_915, 915.0f, 918.0f, 100, 0, 24, true, false, false),
                                          RDEF(UNSET, 902.0f, 928.0f, 100, 0, 30, true, false, false)};
 
+    // Modem preset lookup table (indexed by meshtastic_Config_LoRaConfig_ModemPreset enum 0..9)
+    //                                                preset enum                                                       name            short    bw      bw_wide    cr  sf
+    const ModemPresetInfo modem_presets[MODEM_PRESET_COUNT] = {
+        {meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST,       "LongFast",      "LongF",  250.0f,   812.5f,    5, 11},
+        {meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW,       "LongSlow",      "LongS",  125.0f,   406.25f,   8, 12},
+        {meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW,  "VeryLongSlow",  "VLongS",  62.5f,   203.125f,  8, 12},
+        {meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW,     "MediumSlow",    "MedS",   250.0f,   812.5f,    5, 10},
+        {meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST,     "MediumFast",    "MedF",   250.0f,   812.5f,    5,  9},
+        {meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW,      "ShortSlow",     "ShrtS",  250.0f,   812.5f,    5,  8},
+        {meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST,      "ShortFast",     "ShrtF",  250.0f,   812.5f,    5,  7},
+        {meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE,   "LongMod",       "LongM",  125.0f,   406.25f,   8, 11},
+        {meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO,     "ShortTurbo",    "ShrtT",  500.0f,  1625.0f,    5,  7},
+        {meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO,      "LongTurbo",     "LongT",  500.0f,  1625.0f,    8, 11},
+    };
+
     // Hash function for channel name (djb2)
     static uint32_t hashChannelName(const char* str)
     {
@@ -301,29 +316,7 @@ namespace Mesh
 
         const char* getPresetDisplayName(meshtastic_Config_LoRaConfig_ModemPreset preset)
         {
-            switch (preset)
-            {
-            case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
-                return "ShortTurbo";
-            case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW:
-                return "ShortSlow";
-            case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST:
-                return "ShortFast";
-            case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
-                return "MediumSlow";
-            case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
-                return "MediumFast";
-            case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
-                return "LongSlow";
-            case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
-                return "LongFast";
-            case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
-                return "LongMod";
-            case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
-                return "VeryLongSlow";
-            default:
-                return "Invalid";
-            }
+            return getPresetName(preset);
         }
 
         const char* getChannelNameForHash(const Mesh::MeshConfig& config)
@@ -3264,60 +3257,12 @@ namespace Mesh
             if (loraConfig.use_preset)
             {
                 // Map modem preset to modulation parameters
-                switch (loraConfig.modem_preset)
-                {
-                case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
-                    _bw = _my_region->wide_lora ? 1625.0f : 500.0f;
-                    _cr = 5;
-                    _sf = 7;
-                    break;
-                case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST:
-                    _bw = _my_region->wide_lora ? 812.5f : 250.0f;
-                    _cr = 5;
-                    _sf = 7;
-                    break;
-                case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW:
-                    _bw = _my_region->wide_lora ? 812.5f : 250.0f;
-                    _cr = 5;
-                    _sf = 8;
-                    break;
-                case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
-                    _bw = _my_region->wide_lora ? 812.5f : 250.0f;
-                    _cr = 5;
-                    _sf = 9;
-                    break;
-                case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
-                    _bw = _my_region->wide_lora ? 812.5f : 250.0f;
-                    _cr = 5;
-                    _sf = 10;
-                    break;
-                case meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO:
-                    _bw = _my_region->wide_lora ? 1625.0 : 500;
-                    _cr = 8;
-                    _sf = 11;
-                    break;
-                case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
-                    _bw = _my_region->wide_lora ? 406.25f : 125.0f;
-                    _cr = 8;
-                    _sf = 11;
-                    break;
-                case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
-                    _bw = _my_region->wide_lora ? 203.125 : 62.5;
-                    _cr = 8;
-                    _sf = 12;
-                    break;
-                case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
-                    _bw = _my_region->wide_lora ? 406.25f : 125.0f;
-                    _cr = 8;
-                    _sf = 12;
-                    break;
-                case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
-                default:
-                    _bw = _my_region->wide_lora ? 812.5f : 250.0f;
-                    _cr = 5;
-                    _sf = 11;
-                    break;
-                }
+                const ModemPresetInfo* pi = getModemPresetInfo(static_cast<int>(loraConfig.modem_preset));
+                if (!pi)
+                    pi = &modem_presets[0]; // default to LONG_FAST
+                _bw = _my_region->wide_lora ? pi->bw_wide : pi->bw;
+                _cr = pi->cr;
+                _sf = pi->sf;
             }
             else
             {

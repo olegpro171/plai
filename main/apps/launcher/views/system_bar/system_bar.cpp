@@ -27,37 +27,12 @@
 #include "assets/wifi5.h"
 #include "assets/wifi6.h"
 #endif
-#include "meshtastic/config.pb.h"
 
 using namespace MOONCAKE::APPS;
 
 static const char* getModemPresetShortName(meshtastic_Config_LoRaConfig_ModemPreset preset)
 {
-    switch (preset)
-    {
-    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
-        return "LongF";
-    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
-        return "LongS";
-    case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
-        return "VLongS";
-    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
-        return "MedS";
-    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
-        return "MedF";
-    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW:
-        return "ShrtS";
-    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST:
-        return "ShrtF";
-    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
-        return "LongM";
-    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
-        return "ShrtT";
-    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO:
-        return "LongT";
-    default:
-        return "?";
-    }
+    return Mesh::getPresetShortName(preset);
 }
 
 #define PADDING_X 4

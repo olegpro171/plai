@@ -309,29 +309,7 @@ void AppStats::_render_system_info()
 
 const char* AppStats::_preset_name(int preset)
 {
-    switch (preset)
-    {
-    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
-        return "ShortTurbo";
-    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW:
-        return "ShortSlow";
-    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST:
-        return "ShortFast";
-    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
-        return "MedSlow";
-    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
-        return "MedFast";
-    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
-        return "LongSlow";
-    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
-        return "LongFast";
-    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
-        return "LongMod";
-    case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
-        return "VLongSlow";
-    default:
-        return "Unknown";
-    }
+    return Mesh::getPresetName(static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(preset));
 }
 
 void AppStats::_render_radio_info()
