@@ -8,15 +8,15 @@
 #include "gps.h"
 #include "driver/uart.h"
 #include "esp_log.h"
-#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
 static const char* TAG = "GPS";
 
 // Background task parameters
-#define GPS_TASK_STACK_SIZE 2048
+#define GPS_TASK_STACK_SIZE (1024 * 3)
 #define GPS_TASK_PRIORITY 5
+#define GPS_TASK_PINNED_CORE 1
 #define GPS_READ_TIMEOUT_MS 100
 
 namespace HAL
@@ -78,7 +78,13 @@ namespace HAL
 
         // Start background task
         _task_running = true;
-        BaseType_t ret = xTaskCreate(_uart_task, "gps_task", GPS_TASK_STACK_SIZE, this, GPS_TASK_PRIORITY, &_task_handle);
+        BaseType_t ret = xTaskCreatePinnedToCore(_uart_task,
+                                                 "gps_reader",
+                                                 GPS_TASK_STACK_SIZE,
+                                                 this,
+                                                 GPS_TASK_PRIORITY,
+                                                 &_task_handle,
+                                                 GPS_TASK_PINNED_CORE);
 
         if (ret != pdPASS)
         {

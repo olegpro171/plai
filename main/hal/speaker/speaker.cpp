@@ -63,7 +63,7 @@ namespace HAL
         if (_cfg.task_pinned_core < 2)
         {
             result = xTaskCreatePinnedToCore(spk_task,
-                                             "speaker_task",
+                                             "speaker_i2s",
                                              2048,
                                              this,
                                              _cfg.task_priority,

@@ -21,6 +21,7 @@
 #include "mesh/node_db.h"
 #include "meshtastic/portnums.pb.h"
 #include <algorithm>
+#include <format>
 // assets
 #include "assets/stat_system.h"
 #include "assets/stat_radio.h"
@@ -28,6 +29,7 @@
 #include "assets/stat_gps.h"
 #include "assets/stat_mesh.h"
 #include "assets/stat_db.h"
+#include "assets/stat_tasks.h"
 
 static const char* TAG __attribute__((unused)) = "APP_STATS";
 
@@ -36,7 +38,7 @@ static const char* TAG __attribute__((unused)) = "APP_STATS";
 #define BODY_START_Y 16
 #define ICON_SIZE 12
 
-static const char* TAB_NAMES[] = {"NODE", "SYSTEM", "RADIO", "NODE DB", "GPS", "MESH"};
+static const char* TAB_NAMES[] = {"NODE", "SYSTEM", "RADIO", "NODE DB", "GPS", "MESH", "TASKS"};
 
 static const char* HINT_STATS = "[\u2191][\u2193][\u2190][\u2192] [DEL] [ESC]";
 
@@ -125,6 +127,9 @@ void AppStats::_render_tab()
     case TAB_MESH:
         _render_mesh_info();
         break;
+    case TAB_TASKS:
+        _render_tasks_info();
+        break;
     }
 
     int total_rows = _data.row_idx;
@@ -171,7 +176,8 @@ void AppStats::_render_tab_header(const char* title)
                                image_data_stat_radio,
                                image_data_stat_db,
                                image_data_stat_gps,
-                               image_data_stat_mesh};
+                               image_data_stat_mesh,
+                               image_data_stat_tasks};
     if (_data.current_tab < TAB_COUNT)
     {
         canvas->pushImage(4, 1, ICON_SIZE, ICON_SIZE, icons[_data.current_tab]);
@@ -488,10 +494,6 @@ const char* AppStats::_port_name(uint8_t port)
         return "Simulator";
     case meshtastic_PortNum_POWERSTRESS_APP:
         return "PwrStress";
-    case meshtastic_PortNum_PRIVATE_APP:
-        return "Private";
-    case meshtastic_PortNum_ATAK_FORWARDER:
-        return "ATAKFwd";
     case meshtastic_PortNum_UNKNOWN_APP:
         return "Unknown";
     default:
@@ -564,6 +566,53 @@ void AppStats::_render_mesh_info()
             color = TFT_DARKGREY;
 
         _add_row(name, val, color);
+    }
+}
+
+// ========== Tab: FreeRTOS Tasks ==========
+
+void AppStats::_render_tasks_info()
+{
+    UBaseType_t task_count = uxTaskGetNumberOfTasks();
+    if (task_count == 0)
+    {
+        _add_row("Tasks", "None", TFT_DARKGREY);
+        return;
+    }
+
+    constexpr int MAX_TASKS = 32;
+    TaskStatus_t tasks[MAX_TASKS];
+    uint32_t total_runtime;
+    UBaseType_t filled = uxTaskGetSystemState(tasks, MAX_TASKS, &total_runtime);
+
+    std::sort(tasks,
+              tasks + filled,
+              [](const TaskStatus_t& a, const TaskStatus_t& b) { return a.uxCurrentPriority > b.uxCurrentPriority; });
+
+    std::string tasks_count = std::format("Total count: {}", (unsigned)filled);
+    _add_row(tasks_count.c_str(), "Core Pri Stack", TFT_ORANGE);
+
+    for (UBaseType_t i = 0; i < filled; i++)
+    {
+#ifdef CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID
+        int core = tasks[i].xCoreID;
+        const char* core_str = core == 0 ? "C0" : core == 1 ? "C1" : "?";
+#else
+        const char* core_str = "";
+#endif
+        std::string task_descr = std::format("{:2s}  {:2d} {:4d}B",
+                                             core_str,
+                                             (unsigned)tasks[i].uxCurrentPriority,
+                                             (unsigned long)tasks[i].usStackHighWaterMark);
+        int color;
+        if (tasks[i].usStackHighWaterMark < 512)
+            color = TFT_RED;
+        else if (tasks[i].usStackHighWaterMark < 1024)
+            color = TFT_YELLOW;
+        else
+            color = TFT_CYAN;
+
+        _add_row(tasks[i].pcTaskName, task_descr.c_str(), color);
     }
 }
 
