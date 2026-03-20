@@ -139,6 +139,9 @@ static RoleInfo _get_role_info(meshtastic_Config_DeviceConfig_Role role)
 static bool is_repeat = false;
 static uint32_t next_fire_ts = 0xFFFFFFFF;
 
+static Mesh::SortOrder s_saved_sort_order = Mesh::SortOrder::LAST_HEARD;
+static uint32_t s_saved_node_id = 0;
+
 using namespace MOONCAKE::APPS;
 
 void AppNodes::onCreate()
@@ -148,7 +151,6 @@ void AppNodes::onCreate()
     _data.selected_index = 0;
     _data.scroll_offset = 0;
     _data.total_node_count = 0;
-    _data.list_selected_node_id = 0;
     _data.update_list = true;
     _data.last_nodedb_change = 0;
     _data.last_msgstore_change = 0;
@@ -157,7 +159,6 @@ void AppNodes::onCreate()
     _data.dm_total_lines = 0;
     _data.dm_chars_per_line = 20;
     _data.selected_node_valid = false;
-    _data.sort_order = Mesh::SortOrder::LAST_HEARD;
     _data.fav_total_count = 0;
     _data.fav_selected_index = 0;
     _data.fav_scroll_offset = 0;
@@ -188,7 +189,8 @@ void AppNodes::onResume()
     _data.view_state = ViewState::NODE_LIST;
     _data.selected_index = 0;
     _data.scroll_offset = 0;
-    _data.list_selected_node_id = 0;
+    _data.sort_order = s_saved_sort_order;
+    _data.list_selected_node_id = s_saved_node_id;
     _data.update_list = true;
     _data.last_nodedb_change = 0;
     _data.last_msgstore_change = 0;
@@ -354,6 +356,8 @@ void AppNodes::onRunning()
 
 void AppNodes::onDestroy()
 {
+    s_saved_sort_order = _data.sort_order;
+    s_saved_node_id = _data.list_selected_node_id;
     scroll_text_free(&_data.name_scroll_ctx);
     hl_text_free(&_data.hint_hl_ctx);
 }
