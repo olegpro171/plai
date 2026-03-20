@@ -50,6 +50,7 @@ namespace MOONCAKE::APPS
 
             // Detail state
             Mesh::PacketLogEntry detail_pkt;
+            uint32_t detail_delta_ms;
             int detail_scroll;
             int detail_scroll_max;
 

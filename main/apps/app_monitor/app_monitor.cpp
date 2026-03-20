@@ -418,12 +418,7 @@ bool AppMonitor::_render_packet_list()
             struct tm tm_local;
             localtime_r(&pkt_epoch, &tm_local);
             char time_buf[10];
-            snprintf(time_buf,
-                     sizeof(time_buf),
-                     "%02d:%02d:%02d",
-                     tm_local.tm_hour,
-                     tm_local.tm_min,
-                     tm_local.tm_sec);
+            snprintf(time_buf, sizeof(time_buf), "%02d:%02d:%02d", tm_local.tm_hour, tm_local.tm_min, tm_local.tm_sec);
             canvas->setTextColor(selected ? THEME_COLOR_SELECTED : direction_color, bg);
             canvas->drawRightString(time_buf, rhs - gap_slot, y + 1);
         }
@@ -611,6 +606,40 @@ bool AppMonitor::_render_packet_detail()
         snprintf(buf, sizeof(buf), "0x%08lx", (unsigned long)pkt.id);
         add_row("ID", buf);
     }
+    // Time (local wall clock when logged)
+    {
+        char buf[32];
+        time_t now_epoch = time(nullptr);
+        time_t age_sec = (time_t)((uint32_t)millis() - pkt.timestamp_ms) / 1000;
+        time_t pkt_epoch = now_epoch - age_sec;
+        struct tm tm_local;
+        localtime_r(&pkt_epoch, &tm_local);
+        snprintf(buf, sizeof(buf), "%02d:%02d:%02d", tm_local.tm_hour, tm_local.tm_min, tm_local.tm_sec);
+        add_row("Time", buf);
+    }
+    // Delta (gap since previous packet, precomputed at ENTER time)
+    {
+        char buf[32];
+        format_inter_packet_gap(buf, sizeof(buf), _data.detail_delta_ms);
+        add_row("Delta", buf);
+    }
+    // Relay node (RX header; omitted when byte is 0)
+    if (pkt.relay_node != 0)
+    {
+        char buf[32];
+        Mesh::NodeInfo ni;
+        uint32_t relay_id = _data.hal->nodedb() ? _data.hal->nodedb()->findNodeByRelayByte(pkt.relay_node) : 0;
+        if (relay_id && _data.hal->mesh() && _data.hal->mesh()->getNode(relay_id, ni) && ni.info.user.short_name[0])
+            snprintf(buf,
+                     sizeof(buf),
+                     "%02x \u2192 %s (!%08lx)",
+                     pkt.relay_node,
+                     ni.info.user.short_name,
+                     (unsigned long)relay_id);
+        else
+            snprintf(buf, sizeof(buf), "#%02x", (unsigned)pkt.relay_node);
+        add_row("Relay", buf);
+    }
     // Port
     {
         const char* pname = pkt.crc_error ? "CRC" : _port_name(pkt.port);
@@ -633,8 +662,8 @@ bool AppMonitor::_render_packet_detail()
     // Channel
     {
         char buf[8];
-        snprintf(buf, sizeof(buf), "0x%02X", pkt.channel);
-        add_row("Ch", buf);
+        snprintf(buf, sizeof(buf), "#%02X", pkt.channel);
+        add_row("Channel", buf);
     }
     // Hops
     {
@@ -780,6 +809,16 @@ void AppMonitor::_handle_list_input()
                 _data.hal->playNextSound();
                 _data.hal->keyboard()->waitForRelease(KEY_NUM_ENTER);
                 _data.detail_pkt = log[total - 1 - _data.selected_index];
+                if (_data.selected_index + 1 < total)
+                {
+                    const auto& older = log[total - 1 - (_data.selected_index + 1)];
+                    _data.detail_delta_ms = _data.detail_pkt.timestamp_ms - older.timestamp_ms;
+                }
+                else
+                {
+                    // first packet, use timestamp as delta
+                    _data.detail_delta_ms = _data.detail_pkt.timestamp_ms;
+                }
                 _data.detail_scroll = 0;
                 _data.view_state = ViewState::PACKET_DETAIL;
                 _data.update_list = true;
