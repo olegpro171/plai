@@ -767,44 +767,44 @@ bool AppNodes::_render_node_list()
 
         // Draw SNR/RSSI text widget if hops away is 0
         // 4b. SNR/RSSI text widget (compact 2-line display) with color-coded values
-        canvas->setFont(FONT_6);
         int signal_text_center = signal_text_x + COL_SIGNAL_TEXT_WIDTH / 2;
         uint32_t bg_color = is_selected ? THEME_COLOR_BG_SELECTED : THEME_COLOR_BG;
         uint32_t text_color = is_selected                ? THEME_COLOR_SELECTED
                               : node.info.hops_away == 0 ? _get_snr_color(node.info.snr)
                                                          : THEME_COLOR_SIGNAL_TEXT;
         // Try to resolve relay node short name from relay_node byte
-        bool have_relay_node = false;
         uint32_t relay_node_id = 0;
-        if (node.relay_node != 0 && node.info.hops_away > 0)
+        if (node.info.hops_away > 0)
         {
+            std::string relay_name = std::format("#{:02x}", node.relay_node);
             relay_node_id = nodedb->findNodeByRelayByte(node.relay_node);
             if (relay_node_id != 0)
             {
                 const auto* relay_idx = nodedb->getNodeIndex(relay_node_id);
                 if (relay_idx)
                 {
-                    have_relay_node = true;
-                    short_name = relay_idx->short_name[0] ? relay_idx->short_name
-                                                          : std::format("{:04x}", relay_node_id & 0xFFFF);
+                    relay_name =
+                        relay_idx->short_name[0] ? relay_idx->short_name : std::format("{:04x}", relay_node_id & 0xFFFF);
+                }
+                else
+                {
+                    relay_name = std::format("{:04x}", relay_node_id & 0xFFFF);
                 }
             }
-        }
-
-        if (have_relay_node)
-        {
             // Relay node name - color based on relay node ID
+            canvas->setFont(FONT_6);
             uint32_t relay_node_color = _get_node_color(relay_node_id);
             uint32_t relay_node_text_color = _get_node_text_color(relay_node_id);
             canvas->fillRoundRect(signal_text_x + 1, y_offset + 3, COL_SHORT_RELAY_NAME_WIDTH, 9, 3, relay_node_color);
             canvas->setTextColor(relay_node_text_color, relay_node_color);
-            canvas->drawCenterString(short_name.c_str(), signal_text_x + 3 + COL_SHORT_RELAY_NAME_WIDTH / 2, y_offset + 5);
+            canvas->drawCenterString(relay_name.c_str(), signal_text_x + 2 + COL_SHORT_RELAY_NAME_WIDTH / 2, y_offset + 5);
             // clear the background after text
             canvas->fillRect(signal_text_x + 1 + COL_SHORT_RELAY_NAME_WIDTH, y_offset + 4, 9, 9, bg_color);
         }
         else
         {
             // Line 1: SNR or relay name (top) - color based on SNR quality
+            canvas->setFont(FONT_6);
             char snr_str[8];
             snprintf(snr_str, sizeof(snr_str), "%.1f", node.info.snr);
             canvas->setTextColor(text_color, bg_color);
