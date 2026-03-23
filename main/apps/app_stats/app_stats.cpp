@@ -239,7 +239,17 @@ void AppStats::_render_node_info()
     uint32_t remain_ms = _data.hal->mesh()->getNodeInfoBroadcastRemainingMs();
     uint32_t sec = remain_ms / 1000;
     snprintf(buf, sizeof(buf), "%02lum %02lus", (unsigned long)(sec / 60), (unsigned long)(sec % 60));
-    _add_row("Next broadcast", buf, TFT_CYAN);
+    _add_row("Next NodeInfo", buf, TFT_CYAN);
+
+    remain_ms = _data.hal->mesh()->getPositionBroadcastRemainingMs();
+    sec = remain_ms / 1000;
+    snprintf(buf, sizeof(buf), "%02lum %02lus", (unsigned long)(sec / 60), (unsigned long)(sec % 60));
+    _add_row("Next Position", buf, TFT_CYAN);
+
+    remain_ms = _data.hal->mesh()->getTelemetryBroadcastRemainingMs();
+    sec = remain_ms / 1000;
+    snprintf(buf, sizeof(buf), "%02lum %02lus", (unsigned long)(sec / 60), (unsigned long)(sec % 60));
+    _add_row("Next Telemetry", buf, TFT_CYAN);
 }
 
 // ========== Tab: System Info ==========

@@ -1168,6 +1168,28 @@ namespace Mesh
         return _config.nodeinfo_broadcast_interval_ms - elapsed;
     }
 
+    uint32_t MeshService::getPositionBroadcastRemainingMs() const
+    {
+        if (_config.position_broadcast_interval_ms == 0)
+            return 0;
+        uint32_t now = (uint32_t)millis();
+        uint32_t elapsed = now - _last_position_broadcast_ms;
+        if (elapsed >= _config.position_broadcast_interval_ms)
+            return 0;
+        return _config.position_broadcast_interval_ms - elapsed;
+    }
+
+    uint32_t MeshService::getTelemetryBroadcastRemainingMs() const
+    {
+        if (_config.telemetry_broadcast_interval_ms == 0)
+            return 0;
+        uint32_t now = (uint32_t)millis();
+        uint32_t elapsed = now - _last_telemetry_broadcast_ms;
+        if (elapsed >= _config.telemetry_broadcast_interval_ms)
+            return 0;
+        return _config.telemetry_broadcast_interval_ms - elapsed;
+    }
+
     bool MeshService::setConfig(const MeshConfig& config)
     {
         // Node identity

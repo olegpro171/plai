@@ -326,6 +326,8 @@ namespace Mesh
          * @brief Get milliseconds remaining until next node info broadcast (0 if disabled or due)
          */
         uint32_t getNodeInfoBroadcastRemainingMs() const;
+        uint32_t getPositionBroadcastRemainingMs() const;
+        uint32_t getTelemetryBroadcastRemainingMs() const;
 
         /**
          * @brief Get packet router
