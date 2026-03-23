@@ -2095,6 +2095,14 @@ namespace Mesh
                              hops);
                     break;
                 }
+                case meshtastic_PortNum_NEIGHBORINFO_APP:
+                {
+                    meshtastic_NeighborInfo ninfo = meshtastic_NeighborInfo_init_zero;
+                    pb_istream_t s = pb_istream_from_buffer(pb, ps);
+                    if (pb_decode(&s, meshtastic_NeighborInfo_fields, &ninfo))
+                        snprintf(le.payload_desc, sizeof(le.payload_desc), "%u neighbors", (unsigned)ninfo.neighbors_count);
+                    break;
+                }
                 default:
                     break;
                 }
@@ -2410,6 +2418,10 @@ namespace Mesh
 
             case meshtastic_PortNum_TELEMETRY_APP:
                 handleTelemetryPacket(decoded_packet);
+                break;
+
+            case meshtastic_PortNum_NEIGHBORINFO_APP:
+                handleNeighborInfoPacket(decoded_packet);
                 break;
 
             case meshtastic_PortNum_ROUTING_APP:
@@ -2742,6 +2754,33 @@ namespace Mesh
         {
             ESP_LOGD(TAG, "Telemetry type %d from 0x%08lX", telemetry.which_variant, (unsigned long)packet.from);
         }
+    }
+
+    void MeshService::handleNeighborInfoPacket(const meshtastic_MeshPacket& packet)
+    {
+        meshtastic_NeighborInfo ni = meshtastic_NeighborInfo_init_zero;
+        pb_istream_t stream = pb_istream_from_buffer(packet.decoded.payload.bytes, packet.decoded.payload.size);
+        if (!pb_decode(&stream, meshtastic_NeighborInfo_fields, &ni))
+        {
+            ESP_LOGE(TAG, "Failed to decode NeighborInfo: %s", PB_GET_ERROR(&stream));
+            return;
+        }
+
+        uint32_t source = ni.node_id ? ni.node_id : packet.from;
+        ESP_LOGI(TAG,
+                 "NeighborInfo from 0x%08lX: %u neighbors",
+                 (unsigned long)source,
+                 (unsigned)ni.neighbors_count);
+
+        std::vector<NeighborEntry> entries;
+        entries.reserve(ni.neighbors_count);
+        for (pb_size_t i = 0; i < ni.neighbors_count; i++)
+        {
+            entries.push_back({ni.neighbors[i].node_id, ni.neighbors[i].snr});
+        }
+        neighbors_save(source, entries);
+        if (_nodedb)
+            _nodedb->markDirty();
     }
 
     void MeshService::handleTraceRoutePacket(const meshtastic_MeshPacket& packet, float snr)

@@ -42,6 +42,7 @@ namespace Mesh
     constexpr const char* GREETINGS_FILE = "/sdcard/meshtastic/greetings.dat";
     constexpr const char* FAVORITES_FILE = "/sdcard/meshtastic/favorites.dat";
     constexpr const char* IGNORELIST_FILE = "/sdcard/meshtastic/ignorelist.dat";
+    constexpr const char* NEIGHBORS_DIR = "/sdcard/meshtastic/neighbors";
 
     static constexpr size_t GREETING_MAX_LEN = 200;
 
@@ -99,6 +100,12 @@ namespace Mesh
         uint8_t role;        // 1 byte  - Device role enum
         uint8_t hops_away;   // 1 byte  - Hops away from us
         float snr;           // 4 bytes  - Last SNR value
+    };
+
+    struct NeighborEntry
+    {
+        uint32_t node_id;
+        float snr;
     };
 
     /**
@@ -419,6 +426,12 @@ namespace Mesh
     bool ignorelist_remove(uint32_t node_id);
     bool ignorelist_remove_at(size_t index);
     void ignorelist_clear();
+
+    // Neighbor list file helpers (one file per source node in NEIGHBORS_DIR)
+    // Each file is a flat array of NeighborEntry structs.
+    bool neighbors_save(uint32_t source_node_id, const std::vector<NeighborEntry>& entries);
+    bool neighbors_load(uint32_t source_node_id, std::vector<NeighborEntry>& out);
+    size_t neighbors_get_count(uint32_t source_node_id);
 
 } // namespace Mesh
 

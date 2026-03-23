@@ -47,7 +47,8 @@ namespace MOONCAKE::APPS
             TRACEROUTE_LOG,
             TRACEROUTE_DETAIL,
             FAVORITE_LIST,
-            IGNORE_LIST
+            IGNORE_LIST,
+            NEIGHBOR_LIST
         };
 
     private:
@@ -93,6 +94,12 @@ namespace MOONCAKE::APPS
             int ign_selected_index;
             int ign_scroll_offset;
 
+            // Neighbor list state (in-memory, from NEIGHBORINFO_APP packets)
+            std::vector<Mesh::NeighborEntry> nbr_list;
+            int nbr_selected_index;
+            int nbr_scroll_offset;
+            uint32_t nbr_source_node_id;
+
             // Sorting
             Mesh::SortOrder sort_order;
 
@@ -123,6 +130,8 @@ namespace MOONCAKE::APPS
         bool _render_favorite_hint();
         bool _render_ignore_list();
         bool _render_ignore_hint();
+        bool _render_neighbor_list();
+        bool _render_neighbor_hint();
 
         // Input handling
         void _handle_node_list_input();
@@ -132,6 +141,7 @@ namespace MOONCAKE::APPS
         void _handle_traceroute_detail_input();
         void _handle_favorite_list_input();
         void _handle_ignore_list_input();
+        void _handle_neighbor_list_input();
 
         // Traceroute helpers
         void _start_traceroute();

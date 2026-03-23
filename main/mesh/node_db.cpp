@@ -1535,4 +1535,68 @@ namespace Mesh
 
     void ignorelist_clear() { ::remove(IGNORELIST_FILE); }
 
+    // ========== Neighbor list file helpers ==========
+
+    static std::string _neighbors_file_path(uint32_t source_node_id)
+    {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%s/%08lx.dat", NEIGHBORS_DIR, (unsigned long)source_node_id);
+        return buf;
+    }
+
+    bool neighbors_save(uint32_t source_node_id, const std::vector<NeighborEntry>& entries)
+    {
+        struct stat st;
+        if (stat(NEIGHBORS_DIR, &st) != 0)
+            mkdir(NEIGHBORS_DIR, 0755);
+
+        std::string path = _neighbors_file_path(source_node_id);
+        if (entries.empty())
+        {
+            ::remove(path.c_str());
+            return true;
+        }
+        FILE* f = fopen(path.c_str(), "wb");
+        if (!f)
+            return false;
+        bool ok = fwrite(entries.data(), sizeof(NeighborEntry), entries.size(), f) == entries.size();
+        fclose(f);
+        return ok;
+    }
+
+    bool neighbors_load(uint32_t source_node_id, std::vector<NeighborEntry>& out)
+    {
+        out.clear();
+        std::string path = _neighbors_file_path(source_node_id);
+        FILE* f = fopen(path.c_str(), "rb");
+        if (!f)
+            return false;
+        fseek(f, 0, SEEK_END);
+        size_t sz = ftell(f);
+        size_t count = sz / sizeof(NeighborEntry);
+        if (count == 0)
+        {
+            fclose(f);
+            return true;
+        }
+        out.resize(count);
+        fseek(f, 0, SEEK_SET);
+        size_t rd = fread(out.data(), sizeof(NeighborEntry), count, f);
+        fclose(f);
+        out.resize(rd);
+        return true;
+    }
+
+    size_t neighbors_get_count(uint32_t source_node_id)
+    {
+        std::string path = _neighbors_file_path(source_node_id);
+        FILE* f = fopen(path.c_str(), "rb");
+        if (!f)
+            return 0;
+        fseek(f, 0, SEEK_END);
+        size_t sz = ftell(f);
+        fclose(f);
+        return sz / sizeof(NeighborEntry);
+    }
+
 } // namespace Mesh

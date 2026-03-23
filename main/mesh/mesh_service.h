@@ -391,6 +391,7 @@ namespace Mesh
         void handlePositionPacket(const meshtastic_MeshPacket& packet);
         void handleTelemetryPacket(const meshtastic_MeshPacket& packet);
         void handleTraceRoutePacket(const meshtastic_MeshPacket& packet, float snr);
+        void handleNeighborInfoPacket(const meshtastic_MeshPacket& packet);
         /**
          * @brief Attempt to decrypt and decode @p packet into @p decoded.
          * @return meshtastic_Routing_Error_NONE on success; a specific error code otherwise.

@@ -32,7 +32,7 @@
 static const char* TAG = "APP_NODES";
 
 static const char* HINT_LIST = "[Fn][\u2191][\u2193][\u2190][\u2192][1..8.F.I.T.R.N.P][ENT][DEL][ESC]";
-static const char* HINT_LIST_FN = "[\u2191]HOME [\u2193]END [T]RACE [F]AV";
+static const char* HINT_LIST_FN = "[\u2191]HOME [\u2193]END [T]RACE [F]AV [N]INFO";
 static const char* HINT_DM = "[Fn] [^] [\u2191][\u2193][\u2190][\u2192] [I] [ENTER][DEL] [ESC]";
 static const char* HINT_DM_FN = "[\u2191]HOME [\u2193]END";
 static const char* HINT_DETAIL = "[T]RACE [ENTER]DM [ESC]";
@@ -42,6 +42,8 @@ static const char* HINT_FAV_LIST = "[Fn] [\u2191][\u2193][\u2190][\u2192] [DEL] 
 static const char* HINT_FAV_LIST_FN = "[\u2191]HOME [\u2193]END [DEL]CLEAR ALL";
 static const char* HINT_IGN_LIST = "[Fn] [\u2191][\u2193][\u2190][\u2192] [DEL] [ESC] [ENTER]";
 static const char* HINT_IGN_LIST_FN = "[\u2191]HOME [\u2193]END [DEL]CLEAR ALL";
+static const char* HINT_NBR_LIST = "[Fn] [\u2191][\u2193][\u2190][\u2192] [ESC] [ENTER]";
+static const char* HINT_NBR_LIST_FN = "[\u2191]HOME [\u2193]END";
 
 // Sort order selection dialog
 static const std::vector<std::string> sort_labels = {
@@ -350,6 +352,16 @@ void AppNodes::onRunning()
             _data.hal->canvas_update();
         }
         _handle_ignore_list_input();
+        break;
+
+    case ViewState::NEIGHBOR_LIST:
+        updated |= _render_neighbor_list();
+        updated |= _render_neighbor_hint();
+        if (updated)
+        {
+            _data.hal->canvas_update();
+        }
+        _handle_neighbor_list_input();
         break;
     }
 }
@@ -1975,16 +1987,32 @@ void AppNodes::_handle_node_list_input()
             _data.hal->playNextSound();
             _data.hal->keyboard()->waitForRelease(KEY_NUM_N);
 
-            if (_data.total_node_count > 0 && _data.hal->mesh() && _data.hal->nodedb())
+            if (!keys_state.fn)
+            {
+                if (_data.total_node_count > 0 && _data.hal->mesh() && _data.hal->nodedb())
+                {
+                    Mesh::NodeInfo node;
+                    if (_data.hal->nodedb()->getNodeByIndex(_data.selected_index, node))
+                    {
+                        std::string title = Mesh::NodeDB::getLongLabel(node);
+                        if (UTILS::UI::show_confirmation_dialog(_data.hal, title, "Exchange node information?", "Send", "Cancel"))
+                        {
+                            _data.hal->mesh()->sendNodeInfo(node.info.num, node.info.channel, true);
+                        }
+                        _data.update_list = true;
+                    }
+                }
+            }
+            else if (_data.total_node_count > 0 && _data.hal->nodedb())
             {
                 Mesh::NodeInfo node;
                 if (_data.hal->nodedb()->getNodeByIndex(_data.selected_index, node))
                 {
-                    std::string title = Mesh::NodeDB::getLongLabel(node);
-                    if (UTILS::UI::show_confirmation_dialog(_data.hal, title, "Exchange node information?", "Send", "Cancel"))
-                    {
-                        _data.hal->mesh()->sendNodeInfo(node.info.num, node.info.channel, true);
-                    }
+                    Mesh::neighbors_load(node.info.num, _data.nbr_list);
+                    _data.nbr_source_node_id = node.info.num;
+                    _data.nbr_selected_index = 0;
+                    _data.nbr_scroll_offset = 0;
+                    _data.view_state = ViewState::NEIGHBOR_LIST;
                     _data.update_list = true;
                 }
             }
@@ -3451,6 +3479,238 @@ void AppNodes::_handle_ignore_list_input()
 }
 
 // ========== End Ignore List ==========
+
+// ========== Neighbor List ==========
+
+bool AppNodes::_render_neighbor_list()
+{
+    if (!_data.update_list)
+        return false;
+    _data.update_list = false;
+
+    auto* canvas = _data.hal->canvas();
+    canvas->fillScreen(THEME_COLOR_BG);
+    canvas->setFont(FONT_12);
+
+    // Header
+    canvas->setTextColor(TFT_ORANGE, THEME_COLOR_BG);
+    canvas->drawString("<", 2, 0);
+    canvas->drawString("Neighbors", 14, 0);
+
+    int total = (int)_data.nbr_list.size();
+
+    std::string cnt_str = std::format("{}", total);
+    canvas->setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
+    canvas->drawRightString(cnt_str.c_str(), canvas->width() - 2, 0);
+    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_BG_SELECTED);
+
+    if (total == 0)
+    {
+        canvas->setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
+        canvas->drawCenterString("<no neighbor data>", canvas->width() / 2, canvas->height() / 2 - 6);
+        return true;
+    }
+
+    // Clamp selection
+    if (_data.nbr_selected_index >= total)
+        _data.nbr_selected_index = total - 1;
+    if (_data.nbr_selected_index < 0)
+        _data.nbr_selected_index = 0;
+
+    const int item_y_start = 15;
+    const int max_visible = (canvas->height() - item_y_start - 9) / (LIST_ITEM_HEIGHT + 1);
+
+    if (_data.nbr_selected_index < _data.nbr_scroll_offset)
+        _data.nbr_scroll_offset = _data.nbr_selected_index;
+    if (_data.nbr_selected_index >= _data.nbr_scroll_offset + max_visible)
+        _data.nbr_scroll_offset = _data.nbr_selected_index - max_visible + 1;
+
+    auto* nodedb = _data.hal->nodedb();
+    const int id_col_width = 10 * 6 + 4;
+    const int name_x = id_col_width + 4;
+
+    int y = item_y_start;
+    int vis_end = std::min(_data.nbr_scroll_offset + max_visible, total);
+    for (int idx = _data.nbr_scroll_offset; idx < vis_end; idx++)
+    {
+        const auto& nbr = _data.nbr_list[idx];
+        bool selected = (idx == _data.nbr_selected_index);
+
+        uint32_t bg = selected ? THEME_COLOR_BG_SELECTED : THEME_COLOR_BG;
+        uint32_t fg = selected ? THEME_COLOR_SELECTED : THEME_COLOR_UNSELECTED;
+
+        if (selected)
+            canvas->fillRect(2, y, canvas->width() - 4 - SCROLL_BAR_WIDTH, LIST_ITEM_HEIGHT, THEME_COLOR_BG_SELECTED);
+
+        std::string id_str = std::format("!{:08x}", (unsigned int)nbr.node_id);
+        canvas->setTextColor(selected ? THEME_COLOR_SELECTED : lgfx::v1::convert_to_rgb888(TFT_CYAN), bg);
+        canvas->drawString(id_str.c_str(), 4, y + 1);
+
+        std::string label = "<not found>";
+        if (nodedb)
+        {
+            Mesh::NodeInfo ni;
+            if (nodedb->getNode(nbr.node_id, ni))
+                label = Mesh::NodeDB::getLongLabel(ni);
+        }
+        canvas->setTextColor(fg, bg);
+        int max_label_w = canvas->width() - name_x - SCROLL_BAR_WIDTH - 4;
+        if (canvas->textWidth(label.c_str()) > max_label_w)
+        {
+            size_t trunc = utf8_truncate_len(label.c_str(), (size_t)(max_label_w / 6));
+            label = label.substr(0, trunc) + ">";
+        }
+        canvas->drawString(label.c_str(), name_x, y + 1);
+
+        y += LIST_ITEM_HEIGHT + 1;
+    }
+
+    UTILS::UI::draw_scrollbar(canvas,
+                              canvas->width() - SCROLL_BAR_WIDTH - 1,
+                              item_y_start,
+                              SCROLL_BAR_WIDTH,
+                              max_visible * (LIST_ITEM_HEIGHT + 1),
+                              total,
+                              max_visible,
+                              _data.nbr_scroll_offset,
+                              SCROLLBAR_MIN_HEIGHT);
+
+    return true;
+}
+
+bool AppNodes::_render_neighbor_hint()
+{
+    static bool last_fn = false;
+    auto c = _data.hal->canvas();
+    auto keys_state = _data.hal->keyboard()->keysState();
+    if (last_fn != keys_state.fn)
+    {
+        last_fn = keys_state.fn;
+        c->fillRect(0, c->height() - 9, c->width(), 10, THEME_COLOR_BG);
+    }
+    return hl_text_render(&_data.hint_hl_ctx,
+                          last_fn ? HINT_NBR_LIST_FN : HINT_NBR_LIST,
+                          0,
+                          _data.hal->canvas()->height() - 9,
+                          TFT_DARKGREY,
+                          TFT_WHITE,
+                          THEME_COLOR_BG);
+}
+
+void AppNodes::_handle_neighbor_list_input()
+{
+    _data.hal->keyboard()->updateKeyList();
+    _data.hal->keyboard()->updateKeysState();
+
+    if (_data.hal->keyboard()->isPressed())
+    {
+        uint32_t now = millis();
+        auto keys_state = _data.hal->keyboard()->keysState();
+
+        if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_ESC))
+        {
+            _data.hal->playNextSound();
+            _data.hal->keyboard()->waitForRelease(KEY_NUM_ESC);
+            _data.view_state = ViewState::NODE_LIST;
+            _data.update_list = true;
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_ENTER))
+        {
+            int total = (int)_data.nbr_list.size();
+            if (total > 0 && _data.nbr_selected_index < total)
+            {
+                uint32_t node_id = _data.nbr_list[_data.nbr_selected_index].node_id;
+                auto* nodedb = _data.hal->nodedb();
+                if (nodedb)
+                {
+                    Mesh::NodeInfo ni;
+                    if (nodedb->getNode(node_id, ni))
+                    {
+                        _data.hal->playNextSound();
+                        _data.hal->keyboard()->waitForRelease(KEY_NUM_ENTER);
+                        _data.list_selected_node_id = node_id;
+                        _data.view_state = ViewState::NODE_LIST;
+                        _data.update_list = true;
+                    }
+                }
+            }
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_DOWN))
+        {
+            if (key_repeat_check(is_repeat, next_fire_ts, now))
+            {
+                int total = (int)_data.nbr_list.size();
+                if (keys_state.fn)
+                {
+                    if (_data.nbr_selected_index < total - 1)
+                    {
+                        _data.nbr_selected_index = total - 1;
+                        _data.hal->playNextSound();
+                        _data.update_list = true;
+                    }
+                }
+                else if (_data.nbr_selected_index < total - 1)
+                {
+                    _data.nbr_selected_index++;
+                    _data.hal->playNextSound();
+                    _data.update_list = true;
+                }
+            }
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_UP))
+        {
+            if (key_repeat_check(is_repeat, next_fire_ts, now))
+            {
+                if (keys_state.fn)
+                {
+                    if (_data.nbr_selected_index > 0)
+                    {
+                        _data.nbr_selected_index = 0;
+                        _data.nbr_scroll_offset = 0;
+                        _data.hal->playNextSound();
+                        _data.update_list = true;
+                    }
+                }
+                else if (_data.nbr_selected_index > 0)
+                {
+                    _data.nbr_selected_index--;
+                    _data.hal->playNextSound();
+                    _data.update_list = true;
+                }
+            }
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_RIGHT))
+        {
+            if (key_repeat_check(is_repeat, next_fire_ts, now))
+            {
+                int page = (_data.hal->canvas()->height() - 15 - 9) / (LIST_ITEM_HEIGHT + 1);
+                int last = (int)_data.nbr_list.size() - 1;
+                if (_data.nbr_selected_index < last)
+                {
+                    _data.nbr_selected_index = std::min(_data.nbr_selected_index + page, last);
+                    _data.hal->playNextSound();
+                    _data.update_list = true;
+                }
+            }
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_LEFT))
+        {
+            if (key_repeat_check(is_repeat, next_fire_ts, now) && _data.nbr_selected_index > 0)
+            {
+                int page = (_data.hal->canvas()->height() - 15 - 9) / (LIST_ITEM_HEIGHT + 1);
+                _data.nbr_selected_index = std::max(_data.nbr_selected_index - page, 0);
+                _data.hal->playNextSound();
+                _data.update_list = true;
+            }
+        }
+    }
+    else
+    {
+        is_repeat = false;
+    }
+}
+
+// ========== End Neighbor List ==========
 
 void AppNodes::_send_message(const std::string& text)
 {
