@@ -1350,7 +1350,7 @@ bool AppNodes::_render_node_detail()
 
     canvas->setTextColor(TFT_WHITE, THEME_COLOR_BG);
     canvas->drawString(user.long_name, 14 + badge_w + 4, 0);
-    canvas->drawFastHLine(0, 13, canvas->width(), THEME_COLOR_BG_SELECTED);
+    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_HEADER_LINE);
 
     int y = 15;
 
@@ -1554,7 +1554,7 @@ bool AppNodes::_render_dm_view()
     canvas->pushImage(canvas->width() - 1 - 12, 0, 12, 12, image_data_chat, TFT_WHITE);
     canvas->drawRightString(std::format("{}", _data.dm_msg_count).c_str(), canvas->width() - 2 - 12, 0);
 
-    canvas->drawFastHLine(0, DM_HEADER_HEIGHT - 1, canvas->width() - 1, THEME_COLOR_BG_SELECTED);
+    canvas->drawFastHLine(0, DM_HEADER_HEIGHT - 1, canvas->width() - 1, THEME_COLOR_HEADER_LINE);
 
     // Messages area
     const int messages_area_top = DM_HEADER_HEIGHT;
@@ -1987,7 +1987,7 @@ void AppNodes::_handle_node_list_input()
             _data.hal->playNextSound();
             _data.hal->keyboard()->waitForRelease(KEY_NUM_N);
 
-            if (!keys_state.fn)
+            // if (!keys_state.fn)
             {
                 if (_data.total_node_count > 0 && _data.hal->mesh() && _data.hal->nodedb())
                 {
@@ -2002,6 +2002,32 @@ void AppNodes::_handle_node_list_input()
                                                                 "Cancel"))
                         {
                             _data.hal->mesh()->sendNodeInfo(node.info.num, node.info.channel, true);
+                        }
+                        _data.update_list = true;
+                    }
+                }
+            }
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_B))
+        {
+            _data.hal->playNextSound();
+            _data.hal->keyboard()->waitForRelease(KEY_NUM_B);
+
+            if (!keys_state.fn)
+            {
+                if (_data.total_node_count > 0 && _data.hal->mesh() && _data.hal->nodedb())
+                {
+                    Mesh::NodeInfo node;
+                    if (_data.hal->nodedb()->getNodeByIndex(_data.selected_index, node))
+                    {
+                        std::string title = Mesh::NodeDB::getLongLabel(node);
+                        if (UTILS::UI::show_confirmation_dialog(_data.hal,
+                                                                title,
+                                                                "Exchange neighbors information?",
+                                                                "Send",
+                                                                "Cancel"))
+                        {
+                            // _data.hal->mesh()->sendNodeInfo(node.info.num, node.info.channel, true);
                         }
                         _data.update_list = true;
                     }
@@ -2407,7 +2433,7 @@ bool AppNodes::_render_traceroute_log()
     canvas->fillRoundRect(badge_x, 0, badge_w, LIST_ITEM_HEIGHT, 4, badge_color);
     canvas->setTextColor(badge_text, badge_color);
     canvas->drawCenterString(header_name.c_str(), badge_x + badge_w / 2, 0);
-    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_BG_SELECTED);
+    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_HEADER_LINE);
 
     auto& store = Mesh::MeshDataStore::getInstance();
     int total = (int)_data.tr_total_count;
@@ -2681,7 +2707,7 @@ bool AppNodes::_render_traceroute_detail()
     canvas->setTextColor(badge_text, badge_color);
     canvas->drawCenterString(dest_name.c_str(), dest_badge_x + badge_w / 2, 0);
     // line
-    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_BG_SELECTED);
+    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_HEADER_LINE);
 
     // Build rows: each row is "name  snr_dB"
     // Layout: TO section then BACK section, displayed as a path
@@ -2884,7 +2910,7 @@ bool AppNodes::_render_favorite_list()
     std::string cnt_str = std::format("{}", (int)_data.fav_total_count);
     canvas->setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
     canvas->drawRightString(cnt_str.c_str(), canvas->width() - 2, 0);
-    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_BG_SELECTED);
+    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_HEADER_LINE);
 
     if (_data.fav_total_count == 0)
     {
@@ -2899,7 +2925,7 @@ bool AppNodes::_render_favorite_list()
     if (_data.fav_selected_index < 0)
         _data.fav_selected_index = 0;
 
-    const int item_y_start = 15;
+    const int item_y_start = 14;
     const int max_visible = (canvas->height() - item_y_start - 9) / (LIST_ITEM_HEIGHT + 1);
 
     // Adjust scroll to keep selection visible
@@ -2915,11 +2941,12 @@ bool AppNodes::_render_favorite_list()
 
     auto* nodedb = _data.hal->nodedb();
     const int id_col_width = 10 * 6 + 4; // "!xxxxxxxx" = 10 chars
-    const int name_x = id_col_width + 4;
+    const int badge_x = id_col_width + 4;
 
-    int y = item_y_start;
+    int y = item_y_start + 1;
     for (int i = 0; i < (int)visible_ids.size(); i++)
     {
+        int name_x = badge_x;
         int idx = _data.fav_scroll_offset + i;
         uint32_t node_id = visible_ids[i];
         bool selected = (idx == _data.fav_selected_index);
@@ -2930,19 +2957,27 @@ bool AppNodes::_render_favorite_list()
         if (selected)
             canvas->fillRect(2, y, canvas->width() - 4 - SCROLL_BAR_WIDTH, LIST_ITEM_HEIGHT, THEME_COLOR_BG_SELECTED);
 
-        // Column 1: node_id in !{:08x} format
         std::string id_str = std::format("!{:08x}", (unsigned int)node_id);
         canvas->setTextColor(selected ? THEME_COLOR_SELECTED : lgfx::v1::convert_to_rgb888(TFT_GOLD), bg);
-        canvas->drawString(id_str.c_str(), 4, y + 1);
+        canvas->drawString(id_str.c_str(), 4, y);
 
-        // Column 2: longLabel from node_db if present, otherwise "<not found>"
+        std::string short_name;
         std::string label = "<not found>";
-        if (nodedb)
+        auto* mesh = _data.hal->mesh();
+        Mesh::NodeInfo ni;
+        if (mesh && mesh->getNode(node_id, ni))
         {
-            Mesh::NodeInfo ni;
-            if (nodedb->getNode(node_id, ni))
-                label = Mesh::NodeDB::getLongLabel(ni);
+            short_name = Mesh::NodeDB::getLabel(ni);
+            label = Mesh::NodeDB::getLongLabel(ni);
+
+            uint32_t badge_bg = _get_node_color(node_id);
+            uint32_t badge_fg = _get_node_text_color(node_id);
+            canvas->fillRoundRect(badge_x, y, COL_SHORT_NAME_WIDTH, LIST_ITEM_HEIGHT, 4, badge_bg);
+            canvas->setTextColor(badge_fg, badge_bg);
+            canvas->drawCenterString(short_name.c_str(), badge_x + COL_SHORT_NAME_WIDTH / 2, y);
+            name_x += COL_SHORT_NAME_WIDTH + 4;
         }
+
         canvas->setTextColor(fg, bg);
         int max_label_w = canvas->width() - name_x - SCROLL_BAR_WIDTH - 4;
         if (canvas->textWidth(label.c_str()) > max_label_w)
@@ -2950,7 +2985,7 @@ bool AppNodes::_render_favorite_list()
             size_t trunc = utf8_truncate_len(label.c_str(), (size_t)(max_label_w / 6));
             label = label.substr(0, trunc) + ">";
         }
-        canvas->drawString(label.c_str(), name_x, y + 1);
+        canvas->drawString(label.c_str(), name_x, y);
 
         y += LIST_ITEM_HEIGHT + 1;
     }
@@ -3197,7 +3232,7 @@ bool AppNodes::_render_ignore_list()
     std::string cnt_str = std::format("{}", (int)_data.ign_total_count);
     canvas->setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
     canvas->drawRightString(cnt_str.c_str(), canvas->width() - 2, 0);
-    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_BG_SELECTED);
+    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_HEADER_LINE);
 
     if (_data.ign_total_count == 0)
     {
@@ -3212,7 +3247,7 @@ bool AppNodes::_render_ignore_list()
     if (_data.ign_selected_index < 0)
         _data.ign_selected_index = 0;
 
-    const int item_y_start = 15;
+    const int item_y_start = 14;
     const int max_visible = (canvas->height() - item_y_start - 9) / (LIST_ITEM_HEIGHT + 1);
 
     // Adjust scroll to keep selection visible
@@ -3228,11 +3263,12 @@ bool AppNodes::_render_ignore_list()
 
     auto* nodedb = _data.hal->nodedb();
     const int id_col_width = 10 * 6 + 4; // "!xxxxxxxx" = 10 chars
-    const int name_x = id_col_width + 4;
+    const int badge_x = id_col_width + 4;
 
-    int y = item_y_start;
+    int y = item_y_start + 1;
     for (int i = 0; i < (int)visible_ids.size(); i++)
     {
+        int name_x = badge_x;
         int idx = _data.ign_scroll_offset + i;
         uint32_t node_id = visible_ids[i];
         bool selected = (idx == _data.ign_selected_index);
@@ -3243,27 +3279,35 @@ bool AppNodes::_render_ignore_list()
         if (selected)
             canvas->fillRect(2, y, canvas->width() - 4 - SCROLL_BAR_WIDTH, LIST_ITEM_HEIGHT, THEME_COLOR_BG_SELECTED);
 
-        // Column 1: node_id in !{:08x} format
         std::string id_str = std::format("!{:08x}", (unsigned int)node_id);
         canvas->setTextColor(selected ? THEME_COLOR_SELECTED : lgfx::v1::convert_to_rgb888(TFT_RED), bg);
         canvas->drawString(id_str.c_str(), 4, y + 1);
 
-        // Column 2: longLabel from node_db if present, otherwise "<not found>"
+        std::string short_name;
         std::string label = "<not found>";
-        if (nodedb)
+        auto* mesh = _data.hal->mesh();
+        Mesh::NodeInfo ni;
+        if (mesh && mesh->getNode(node_id, ni))
         {
-            Mesh::NodeInfo ni;
-            if (nodedb->getNode(node_id, ni))
-                label = Mesh::NodeDB::getLongLabel(ni);
+            short_name = Mesh::NodeDB::getLabel(ni);
+            label = Mesh::NodeDB::getLongLabel(ni);
+
+            uint32_t badge_bg = _get_node_color(node_id);
+            uint32_t badge_fg = _get_node_text_color(node_id);
+            canvas->fillRoundRect(badge_x, y, COL_SHORT_NAME_WIDTH, LIST_ITEM_HEIGHT, 4, badge_bg);
+            canvas->setTextColor(badge_fg, badge_bg);
+            canvas->drawCenterString(short_name.c_str(), badge_x + COL_SHORT_NAME_WIDTH / 2, y);
+            name_x += COL_SHORT_NAME_WIDTH + 4;
         }
-        canvas->setTextColor(fg, bg);
+
         int max_label_w = canvas->width() - name_x - SCROLL_BAR_WIDTH - 4;
+        canvas->setTextColor(fg, bg);
         if (canvas->textWidth(label.c_str()) > max_label_w)
         {
             size_t trunc = utf8_truncate_len(label.c_str(), (size_t)(max_label_w / 6));
             label = label.substr(0, trunc) + ">";
         }
-        canvas->drawString(label.c_str(), name_x, y + 1);
+        canvas->drawString(label.c_str(), name_x, y);
 
         y += LIST_ITEM_HEIGHT + 1;
     }
@@ -3506,7 +3550,7 @@ bool AppNodes::_render_neighbor_list()
     std::string cnt_str = std::format("{}", total);
     canvas->setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
     canvas->drawRightString(cnt_str.c_str(), canvas->width() - 2, 0);
-    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_BG_SELECTED);
+    canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_HEADER_LINE);
 
     if (total == 0)
     {
@@ -3521,7 +3565,7 @@ bool AppNodes::_render_neighbor_list()
     if (_data.nbr_selected_index < 0)
         _data.nbr_selected_index = 0;
 
-    const int item_y_start = 15;
+    const int item_y_start = 14;
     const int max_visible = (canvas->height() - item_y_start - 9) / (LIST_ITEM_HEIGHT + 1);
 
     if (_data.nbr_selected_index < _data.nbr_scroll_offset)
@@ -3530,14 +3574,14 @@ bool AppNodes::_render_neighbor_list()
         _data.nbr_scroll_offset = _data.nbr_selected_index - max_visible + 1;
 
     auto* nodedb = _data.hal->nodedb();
-    auto* mesh = _data.hal->mesh();
     const int id_col_width = 10 * 6 + 4;
-    const int name_x = id_col_width + 4;
+    const int badge_x = id_col_width + 4;
 
-    int y = item_y_start;
+    int y = item_y_start + 1;
     int vis_end = std::min(_data.nbr_scroll_offset + max_visible, total);
     for (int idx = _data.nbr_scroll_offset; idx < vis_end; idx++)
     {
+        int name_x = badge_x;
         const auto& nbr = _data.nbr_list[idx];
         bool selected = (idx == _data.nbr_selected_index);
 
@@ -3549,14 +3593,23 @@ bool AppNodes::_render_neighbor_list()
 
         std::string id_str = std::format("!{:08x}", (unsigned int)nbr.node_id);
         canvas->setTextColor(selected ? THEME_COLOR_SELECTED : lgfx::v1::convert_to_rgb888(TFT_CYAN), bg);
-        canvas->drawString(id_str.c_str(), 4, y + 1);
+        canvas->drawString(id_str.c_str(), 4, y);
 
+        std::string short_name;
         std::string label = "<not found>";
+        auto* mesh = _data.hal->mesh();
         Mesh::NodeInfo ni;
         if (mesh && mesh->getNode(nbr.node_id, ni))
         {
-            if (mesh->getNode(nbr.node_id, ni))
-                label = Mesh::NodeDB::getLongLabel(ni);
+            short_name = Mesh::NodeDB::getLabel(ni);
+            label = Mesh::NodeDB::getLongLabel(ni);
+
+            uint32_t badge_bg = _get_node_color(nbr.node_id);
+            uint32_t badge_fg = _get_node_text_color(nbr.node_id);
+            canvas->fillRoundRect(badge_x, y, COL_SHORT_NAME_WIDTH, LIST_ITEM_HEIGHT, 4, badge_bg);
+            canvas->setTextColor(badge_fg, badge_bg);
+            canvas->drawCenterString(short_name.c_str(), badge_x + COL_SHORT_NAME_WIDTH / 2, y);
+            name_x += COL_SHORT_NAME_WIDTH + 4;
         }
         canvas->setTextColor(fg, bg);
         int max_label_w = canvas->width() - name_x - SCROLL_BAR_WIDTH - 4;
@@ -3565,7 +3618,7 @@ bool AppNodes::_render_neighbor_list()
             size_t trunc = utf8_truncate_len(label.c_str(), (size_t)(max_label_w / 6));
             label = label.substr(0, trunc) + ">";
         }
-        canvas->drawString(label.c_str(), name_x, y + 1);
+        canvas->drawString(label.c_str(), name_x, y);
 
         y += LIST_ITEM_HEIGHT + 1;
     }
