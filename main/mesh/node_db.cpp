@@ -530,6 +530,7 @@ namespace Mesh
                                                });
                 if (oldest != _index.end())
                 {
+                    neighbors_delete(oldest->node_id);
                     deleteNodeFile(oldest->node_id);
                     _index.erase(oldest);
                 }
@@ -928,6 +929,7 @@ namespace Mesh
         if (deleteNodeFile(node_id))
         {
             Mesh::MeshDataStore::getInstance().removeNodeData(node_id);
+            neighbors_delete(node_id);
             removeIndexEntry(node_id);
             _dirty = true;
             ESP_LOGI(TAG, "Removed node 0x%08lX", (unsigned long)node_id);
@@ -942,6 +944,7 @@ namespace Mesh
         for (const auto& entry : _index)
         {
             Mesh::MeshDataStore::getInstance().removeNodeData(entry.node_id);
+            neighbors_delete(entry.node_id);
             deleteNodeFile(entry.node_id);
         }
 
@@ -1597,6 +1600,12 @@ namespace Mesh
         size_t sz = ftell(f);
         fclose(f);
         return sz / sizeof(NeighborEntry);
+    }
+
+    void neighbors_delete(uint32_t source_node_id)
+    {
+        std::string path = _neighbors_file_path(source_node_id);
+        ::remove(path.c_str());
     }
 
 } // namespace Mesh

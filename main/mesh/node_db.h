@@ -432,6 +432,7 @@ namespace Mesh
     bool neighbors_save(uint32_t source_node_id, const std::vector<NeighborEntry>& entries);
     bool neighbors_load(uint32_t source_node_id, std::vector<NeighborEntry>& out);
     size_t neighbors_get_count(uint32_t source_node_id);
+    void neighbors_delete(uint32_t source_node_id);
 
 } // namespace Mesh
 
