@@ -2767,10 +2767,7 @@ namespace Mesh
         }
 
         uint32_t source = ni.node_id ? ni.node_id : packet.from;
-        ESP_LOGI(TAG,
-                 "NeighborInfo from 0x%08lX: %u neighbors",
-                 (unsigned long)source,
-                 (unsigned)ni.neighbors_count);
+        ESP_LOGI(TAG, "NeighborInfo from 0x%08lX: %u neighbors", (unsigned long)source, (unsigned)ni.neighbors_count);
 
         std::vector<NeighborEntry> entries;
         entries.reserve(ni.neighbors_count);
@@ -3670,8 +3667,6 @@ namespace Mesh
         {
             NodeInfo node;
             if (!_nodedb->getNodeByIndex(i, node))
-                continue;
-            if (node.info.num == _config.node_id)
                 continue;
             if (!node.info.has_user)
                 continue;

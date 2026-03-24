@@ -32,7 +32,7 @@
 static const char* TAG = "APP_NODES";
 
 static const char* HINT_LIST = "[Fn][\u2191][\u2193][\u2190][\u2192][1..8.F.I.T.R.N.P][ENT][DEL][ESC]";
-static const char* HINT_LIST_FN = "[\u2191]HOME [\u2193]END [T]RACE [F]AV [N]INFO";
+static const char* HINT_LIST_FN = "[\u2191]HOME [\u2193]END [T][F][I][N][B]";
 static const char* HINT_DM = "[Fn] [^] [\u2191][\u2193][\u2190][\u2192] [I] [ENTER][DEL] [ESC]";
 static const char* HINT_DM_FN = "[\u2191]HOME [\u2193]END";
 static const char* HINT_DETAIL = "[T]RACE [ENTER]DM [ESC]";
