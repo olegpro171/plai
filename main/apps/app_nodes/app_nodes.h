@@ -150,6 +150,7 @@ namespace MOONCAKE::APPS
         void _apply_sort_order(Mesh::SortOrder new_order);
 
         // Helpers
+        bool _selected_node_valid();
         void _refresh_nodes();
         void _refresh_messages();
         void _send_message(const std::string& text);

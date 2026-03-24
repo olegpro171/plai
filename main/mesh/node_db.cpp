@@ -440,7 +440,7 @@ namespace Mesh
 
     std::string NodeDB::getLabel(const NodeInfo& node)
     {
-        if (node.info.user.short_name[0])
+        if (node.info.has_user && node.info.user.short_name[0])
         {
             return node.info.user.short_name;
         }

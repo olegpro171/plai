@@ -1875,29 +1875,28 @@ void AppNodes::_handle_node_list_input()
             _data.hal->playNextSound();
             _data.hal->keyboard()->waitForRelease(KEY_NUM_I);
 
-            if (keys_state.fn)
+            if (_selected_node_valid())
             {
-                // Open ignore list view
-                _data.ign_total_count = Mesh::ignorelist_get_count();
-                _data.ign_selected_index = 0;
-                _data.ign_scroll_offset = 0;
-                _data.view_state = ViewState::IGNORE_LIST;
-                _data.update_list = true;
-            }
-            else if (_data.total_node_count > 0 && _data.hal->nodedb())
-            {
-                Mesh::NodeInfo node;
-                if (_data.hal->nodedb()->getNodeByIndex(_data.selected_index, node))
+                if (keys_state.fn)
                 {
-                    bool new_ignored = !node.info.is_ignored;
-                    _data.hal->nodedb()->setIgnored(node.info.num, new_ignored);
+                    // Open ignore list view
+                    _data.ign_total_count = Mesh::ignorelist_get_count();
+                    _data.ign_selected_index = 0;
+                    _data.ign_scroll_offset = 0;
+                    _data.view_state = ViewState::IGNORE_LIST;
+                    _data.update_list = true;
+                }
+                else
+                {
+                    bool new_ignored = !_data.selected_node.info.is_ignored;
+                    _data.hal->nodedb()->setIgnored(_data.selected_node.info.num, new_ignored);
                     if (new_ignored)
                     {
-                        Mesh::ignorelist_add(node.info.num);
+                        Mesh::ignorelist_add(_data.selected_node.info.num);
                     }
                     else
                     {
-                        Mesh::ignorelist_remove(node.info.num);
+                        Mesh::ignorelist_remove(_data.selected_node.info.num);
                     }
                     _data.update_list = true;
                 }
@@ -1908,42 +1907,33 @@ void AppNodes::_handle_node_list_input()
             _data.hal->playNextSound();
             _data.hal->keyboard()->waitForRelease(KEY_NUM_T);
 
-            if (_data.total_node_count > 0 && _data.hal->nodedb())
+            if (_selected_node_valid())
             {
-                _data.selected_node_valid = _data.hal->nodedb()->getNodeByIndex(_data.selected_index, _data.selected_node);
-                if (_data.selected_node_valid)
+                _data.selected_node_id = _data.selected_node.info.num;
+                _data.tr_total_count = Mesh::MeshDataStore::getInstance().getTraceRouteCount(_data.selected_node_id);
+                _data.tr_selected_index = std::max(0, (int)_data.tr_total_count - 1);
+                _data.tr_scroll_offset = 0;
+                _data.tr_detail_scroll = 0;
+                if (keys_state.fn)
                 {
-                    _data.selected_node_id = _data.selected_node.info.num;
-                    _data.tr_total_count = Mesh::MeshDataStore::getInstance().getTraceRouteCount(_data.selected_node_id);
-                    _data.tr_selected_index = std::max(0, (int)_data.tr_total_count - 1);
-                    _data.tr_scroll_offset = 0;
-                    _data.tr_detail_scroll = 0;
-                    if (keys_state.fn)
-                    {
-                        _start_traceroute();
-                    }
-                    _data.view_state = ViewState::TRACEROUTE_LOG;
-                    _data.update_list = true;
+                    _start_traceroute();
                 }
+                _data.view_state = ViewState::TRACEROUTE_LOG;
+                _data.update_list = true;
             }
         }
         else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_R))
         {
-            if (_data.total_node_count > 0 && _data.hal->nodedb())
+            if (_selected_node_valid() && _data.selected_node.info.hops_away > 0 && _data.selected_node.relay_node != 0)
             {
-                Mesh::NodeInfo node;
-                if (_data.hal->nodedb()->getNodeByIndex(_data.selected_index, node) && node.info.hops_away > 0 &&
-                    node.relay_node != 0)
+                uint32_t relay_id = _data.hal->nodedb()->findNodeByRelayByte(_data.selected_node.relay_node);
+                if (relay_id != 0)
                 {
-                    uint32_t relay_id = _data.hal->nodedb()->findNodeByRelayByte(node.relay_node);
-                    if (relay_id != 0)
-                    {
-                        _data.hal->playNextSound();
-                        _data.hal->keyboard()->waitForRelease(KEY_NUM_R);
-                        _data.list_selected_node_id = relay_id;
-                        scroll_text_reset(&_data.name_scroll_ctx);
-                        _data.update_list = true;
-                    }
+                    _data.hal->playNextSound();
+                    _data.hal->keyboard()->waitForRelease(KEY_NUM_R);
+                    _data.list_selected_node_id = relay_id;
+                    scroll_text_reset(&_data.name_scroll_ctx);
+                    _data.update_list = true;
                 }
             }
         }
@@ -1952,24 +1942,16 @@ void AppNodes::_handle_node_list_input()
             _data.hal->playNextSound();
             _data.hal->keyboard()->waitForRelease(KEY_NUM_N);
 
-            // if (!keys_state.fn)
+            if (_selected_node_valid())
             {
-                if (_data.total_node_count > 0 && _data.hal->mesh() && _data.hal->nodedb())
+                if (!keys_state.fn)
                 {
-                    Mesh::NodeInfo node;
-                    if (_data.hal->nodedb()->getNodeByIndex(_data.selected_index, node))
+                    std::string title = Mesh::NodeDB::getLongLabel(_data.selected_node);
+                    if (UTILS::UI::show_confirmation_dialog(_data.hal, title, "Exchange node information?", "Send", "Cancel"))
                     {
-                        std::string title = Mesh::NodeDB::getLongLabel(node);
-                        if (UTILS::UI::show_confirmation_dialog(_data.hal,
-                                                                title,
-                                                                "Exchange node information?",
-                                                                "Send",
-                                                                "Cancel"))
-                        {
-                            _data.hal->mesh()->sendNodeInfo(node.info.num, node.info.channel, true);
-                        }
-                        _data.update_list = true;
+                        _data.hal->mesh()->sendNodeInfo(_data.selected_node.info.num, _data.selected_node.info.channel, true);
                     }
+                    _data.update_list = true;
                 }
             }
         }
@@ -1978,33 +1960,27 @@ void AppNodes::_handle_node_list_input()
             _data.hal->playNextSound();
             _data.hal->keyboard()->waitForRelease(KEY_NUM_B);
 
-            if (!keys_state.fn)
+            if (_selected_node_valid())
             {
-                if (_data.total_node_count > 0 && _data.hal->mesh() && _data.hal->nodedb())
+                if (!keys_state.fn)
                 {
-                    Mesh::NodeInfo node;
-                    if (_data.hal->nodedb()->getNodeByIndex(_data.selected_index, node))
+                    std::string title = Mesh::NodeDB::getLongLabel(_data.selected_node);
+                    if (UTILS::UI::show_confirmation_dialog(_data.hal,
+                                                            title,
+                                                            "Exchange neighbors information?",
+                                                            "Send",
+                                                            "Cancel"))
                     {
-                        std::string title = Mesh::NodeDB::getLongLabel(node);
-                        if (UTILS::UI::show_confirmation_dialog(_data.hal,
-                                                                title,
-                                                                "Exchange neighbors information?",
-                                                                "Send",
-                                                                "Cancel"))
-                        {
-                            _data.hal->mesh()->sendNeighborInfo(node.info.num, node.info.channel, true);
-                        }
-                        _data.update_list = true;
+                        _data.hal->mesh()->sendNeighborInfo(_data.selected_node.info.num,
+                                                            _data.selected_node.info.channel,
+                                                            true);
                     }
+                    _data.update_list = true;
                 }
-            }
-            else if (_data.total_node_count > 0 && _data.hal->nodedb())
-            {
-                Mesh::NodeInfo node;
-                if (_data.hal->nodedb()->getNodeByIndex(_data.selected_index, node))
+                else
                 {
-                    Mesh::neighbors_load(node.info.num, _data.nbr_list);
-                    _data.nbr_source_node_id = node.info.num;
+                    Mesh::neighbors_load(_data.selected_node.info.num, _data.nbr_list);
+                    _data.nbr_source_node_id = _data.selected_node.info.num;
                     _data.nbr_selected_index = 0;
                     _data.nbr_scroll_offset = 0;
                     _data.view_state = ViewState::NEIGHBOR_LIST;
@@ -2017,47 +1993,41 @@ void AppNodes::_handle_node_list_input()
             _data.hal->playNextSound();
             _data.hal->keyboard()->waitForRelease(KEY_NUM_P);
 
-            if (_data.total_node_count > 0 && _data.hal->mesh() && _data.hal->nodedb())
+            if (_selected_node_valid())
             {
-                Mesh::NodeInfo node;
-                if (_data.hal->nodedb()->getNodeByIndex(_data.selected_index, node))
+                const auto& cfg = _data.hal->mesh()->getConfig();
+                std::string pos_info;
+                if (cfg.position == Mesh::MeshConfig::POSITION_OFF)
                 {
-                    const auto& cfg = _data.hal->mesh()->getConfig();
-                    std::string pos_info;
-                    if (cfg.position == Mesh::MeshConfig::POSITION_OFF)
-                    {
-                        UTILS::UI::show_error_dialog(_data.hal,
-                                                     "Exchange position",
-                                                     "Position sharing is disabled in settings");
-                        _data.update_list = true;
-                        return;
-                    }
-                    else if (cfg.position == Mesh::MeshConfig::POSITION_FIXED)
-                    {
-                        char buf[64];
-                        snprintf(buf,
-                                 sizeof(buf),
-                                 "Fixed position: %.5f, %.5f, %ldm",
-                                 cfg.fixed_latitude * 1e-7,
-                                 cfg.fixed_longitude * 1e-7,
-                                 cfg.fixed_altitude);
-                        pos_info = buf;
-                    }
-                    else // POSITION_GPS
-                    {
-                        pos_info = "Live GPS position";
-                    }
-
-                    std::string title = Mesh::NodeDB::getLongLabel(node);
-                    if (UTILS::UI::show_confirmation_dialog(_data.hal, title, pos_info, "Send", "Cancel"))
-                    {
-                        if (!_data.hal->mesh()->sendPosition(node.info.num, node.info.channel, true))
-                        {
-                            UTILS::UI::show_error_dialog(_data.hal, "Exchange position", "Failed to send position");
-                        }
-                    }
+                    UTILS::UI::show_error_dialog(_data.hal, "Exchange position", "Position sharing is disabled in settings");
                     _data.update_list = true;
+                    return;
                 }
+                else if (cfg.position == Mesh::MeshConfig::POSITION_FIXED)
+                {
+                    char buf[64];
+                    snprintf(buf,
+                             sizeof(buf),
+                             "Fixed position: %.5f, %.5f, %ldm",
+                             cfg.fixed_latitude * 1e-7,
+                             cfg.fixed_longitude * 1e-7,
+                             cfg.fixed_altitude);
+                    pos_info = buf;
+                }
+                else // POSITION_GPS
+                {
+                    pos_info = "Live GPS position";
+                }
+
+                std::string title = Mesh::NodeDB::getLongLabel(_data.selected_node);
+                if (UTILS::UI::show_confirmation_dialog(_data.hal, title, pos_info, "Send", "Cancel"))
+                {
+                    if (!_data.hal->mesh()->sendPosition(_data.selected_node.info.num, _data.selected_node.info.channel, true))
+                    {
+                        UTILS::UI::show_error_dialog(_data.hal, "Exchange position", "Failed to send position");
+                    }
+                }
+                _data.update_list = true;
             }
         }
         else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_TAB))
@@ -2383,10 +2353,11 @@ bool AppNodes::_render_traceroute_log()
     canvas->setFont(FONT_12);
 
     // Header
-    std::string header_name = _data.selected_node_valid ? _data.selected_node.info.user.short_name : "???";
+    std::string header_name = _data.selected_node_valid ? Mesh::NodeDB::getLabel(_data.selected_node) : "???";
     canvas->setTextColor(TFT_ORANGE, THEME_COLOR_BG);
     canvas->drawString("<", 2, 0);
     canvas->drawString("Traceroute", 14, 0);
+    // color badge
     uint32_t badge_color = _get_node_color(_data.selected_node_id);
     uint32_t badge_text = _get_node_text_color(_data.selected_node_id);
     int badge_w = COL_SHORT_NAME_WIDTH;
@@ -2395,6 +2366,11 @@ bool AppNodes::_render_traceroute_log()
     canvas->setTextColor(badge_text, badge_color);
     canvas->drawCenterString(header_name.c_str(), badge_x + badge_w / 2, 0);
     canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_HEADER_LINE);
+
+    // count
+    std::string cnt_str = std::format("{}", _data.tr_total_count);
+    canvas->setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
+    canvas->drawRightString(cnt_str.c_str(), canvas->width() - COL_SHORT_NAME_WIDTH - 2 - 4, 0);
 
     auto& store = Mesh::MeshDataStore::getInstance();
     int total = (int)_data.tr_total_count;
@@ -2633,18 +2609,15 @@ bool AppNodes::_render_traceroute_detail()
     int badge_w = COL_SHORT_NAME_WIDTH;
     int badge_gap = 10;
 
-    auto* nodedb = _data.hal->nodedb();
+    auto* mesh = _data.hal->mesh();
 
     // Helper: resolve short name from node ID (falls back to mesh config for our own node)
     uint32_t our_id = _data.hal->mesh() ? _data.hal->mesh()->getNodeId() : 0;
-    auto* tr_mesh = _data.hal->mesh();
-    auto get_short = [nodedb, tr_mesh, our_id](uint32_t nid) -> std::string
+    auto get_short = [mesh, our_id](uint32_t nid) -> std::string
     {
         Mesh::NodeInfo ni;
-        if (nodedb && nodedb->getNode(nid, ni) && ni.info.user.short_name[0])
-            return ni.info.user.short_name;
-        if (tr_mesh && nid == our_id && tr_mesh->getConfig().short_name[0])
-            return tr_mesh->getConfig().short_name;
+        if (mesh && mesh->getNode(nid, ni))
+            return Mesh::NodeDB::getLabel(ni);
         return std::format("{:04x}", nid & 0xFFFF);
     };
 
@@ -2900,7 +2873,6 @@ bool AppNodes::_render_favorite_list()
     int vis_count = std::min(max_visible, (int)_data.fav_total_count - _data.fav_scroll_offset);
     Mesh::favorites_load_range((size_t)_data.fav_scroll_offset, (size_t)vis_count, visible_ids);
 
-    auto* nodedb = _data.hal->nodedb();
     const int id_col_width = 10 * 6 + 4; // "!xxxxxxxx" = 10 chars
     const int badge_x = id_col_width + 4;
 
@@ -3222,7 +3194,6 @@ bool AppNodes::_render_ignore_list()
     int vis_count = std::min(max_visible, (int)_data.ign_total_count - _data.ign_scroll_offset);
     Mesh::ignorelist_load_range((size_t)_data.ign_scroll_offset, (size_t)vis_count, visible_ids);
 
-    auto* nodedb = _data.hal->nodedb();
     const int id_col_width = 10 * 6 + 4; // "!xxxxxxxx" = 10 chars
     const int badge_x = id_col_width + 4;
 
@@ -3510,7 +3481,18 @@ bool AppNodes::_render_neighbor_list()
 
     std::string cnt_str = std::format("{}", total);
     canvas->setTextColor(TFT_DARKGREY, THEME_COLOR_BG);
-    canvas->drawRightString(cnt_str.c_str(), canvas->width() - 2, 0);
+    canvas->drawRightString(cnt_str.c_str(), canvas->width() - COL_SHORT_NAME_WIDTH - 2 - 4, 0);
+    // color badge
+    {
+        std::string header_name = _data.selected_node_valid ? Mesh::NodeDB::getLabel(_data.selected_node) : "???";
+        uint32_t badge_color = _get_node_color(_data.selected_node_id);
+        uint32_t badge_text = _get_node_text_color(_data.selected_node_id);
+        const int badge_w = COL_SHORT_NAME_WIDTH;
+        const int header_badge_x = canvas->width() - badge_w - 2;
+        canvas->fillRoundRect(header_badge_x, 0, badge_w, LIST_ITEM_HEIGHT, 4, badge_color);
+        canvas->setTextColor(badge_text, badge_color);
+        canvas->drawCenterString(header_name.c_str(), header_badge_x + badge_w / 2, 0);
+    }
     canvas->drawFastHLine(0, 14, canvas->width(), THEME_COLOR_HEADER_LINE);
 
     if (total == 0)
@@ -3534,7 +3516,7 @@ bool AppNodes::_render_neighbor_list()
     if (_data.nbr_selected_index >= _data.nbr_scroll_offset + max_visible)
         _data.nbr_scroll_offset = _data.nbr_selected_index - max_visible + 1;
 
-    auto* nodedb = _data.hal->nodedb();
+    // auto* nodedb = _data.hal->nodedb();
     const int id_col_width = 10 * 6 + 4;
     const int badge_x = id_col_width + 4;
 
@@ -3819,4 +3801,11 @@ std::string AppNodes::_format_node_id(uint32_t id)
     char buf[12];
     snprintf(buf, sizeof(buf), "!%08x", (unsigned int)id);
     return buf;
+}
+
+bool AppNodes::_selected_node_valid()
+{
+    return _data.selected_node_valid = _data.total_node_count > 0
+                                           ? _data.hal->nodedb()->getNodeByIndex(_data.selected_index, _data.selected_node)
+                                           : false;
 }
