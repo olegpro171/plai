@@ -128,6 +128,8 @@ namespace KEYBOARD
         };
 
         const RegValue init_table[] = {
+            // Reset config to known state (pulse-mode interrupts, all IEN off)
+            {TCA8418_REG_CFG, 0x00},
             // GPIO - set default all GPIO pins to INPUT
             {TCA8418_REG_GPIO_DIR_1, 0x00},
             {TCA8418_REG_GPIO_DIR_2, 0x00},
@@ -210,10 +212,9 @@ namespace KEYBOARD
         if (!_initialized)
             return;
 
-        // Enable key event + GPIO interrupts
         uint8_t value;
         read_register(TCA8418_REG_CFG, &value);
-        value |= (TCA8418_REG_CFG_GPI_IEN | TCA8418_REG_CFG_KE_IEN);
+        value |= (TCA8418_REG_CFG_OVR_FLOW_IEN | TCA8418_REG_CFG_KE_IEN);
         write_register(TCA8418_REG_CFG, value);
     }
 
@@ -287,8 +288,8 @@ namespace KEYBOARD
         read_register(TCA8418_REG_GPIO_INT_STAT_2, &dummy);
         read_register(TCA8418_REG_GPIO_INT_STAT_3, &dummy);
 
-        // Clear INT_STAT register
-        write_register(TCA8418_REG_INT_STAT, 3);
+        // Clear all INT_STAT flags
+        write_register(TCA8418_REG_INT_STAT, 0x1F);
     }
 
     uint8_t tca8418_driver::available()

@@ -138,38 +138,52 @@ namespace KEYBOARD
 
     void TCA8418KeyboardReader::update()
     {
+        // Failsafe: if INT pin is asserted (low) but ISR flag wasn't set, recover
+        if (!_isr_flag && _interrupt_pin >= 0 &&
+            gpio_get_level((gpio_num_t)_interrupt_pin) == 0)
+        {
+            _isr_flag = true;
+        }
+
         if (!_isr_flag)
         {
             return;
         }
+
+        // Clear flag BEFORE processing so a new ISR during processing is not lost
+        _isr_flag = false;
+
         uint8_t int_stat = 0;
         if (!_tca8418->read_register(TCA8418_REG_INT_STAT, &int_stat))
             return;
-        // Check if key event interrupt is set
-        if (int_stat & TCA8418_REG_INT_STAT_K_INT)
+
+        if (!int_stat)
+            return;
+
+        // FIFO overflow: release events may have been lost, clear stale key state
+        if (int_stat & TCA8418_REG_INT_STAT_OVR_FLOW_INT)
         {
-            // get number of events
+            ESP_LOGW(TAG, "Key event FIFO overflow, clearing key state");
+            _key_list.clear();
+        }
+
+        // Drain key events from FIFO
+        if (int_stat & (TCA8418_REG_INT_STAT_K_INT | TCA8418_REG_INT_STAT_OVR_FLOW_INT))
+        {
             while (_tca8418->available() > 0)
             {
-                // Get the key event
                 uint8_t event_raw = _tca8418->get_event();
-
-                // Skip if no event
                 if (event_raw == 0)
                     break;
 
                 _key_event_raw_buffer = getKeyEventRaw(event_raw);
-
-                // Remap to match CARDPUTER coordinate system
                 remap(_key_event_raw_buffer);
-
-                // Update the key list
                 updateKeyList(_key_event_raw_buffer);
             }
-            // Clear the IRQ flag
-            _tca8418->write_register(TCA8418_REG_INT_STAT, TCA8418_REG_INT_STAT_K_INT);
         }
-        _isr_flag = false;
+
+        // Clear GPI event status, drain any remaining FIFO, and clear all INT_STAT flags
+        _tca8418->flush();
     }
 
     TCA8418KeyboardReader::KeyEventRaw_t TCA8418KeyboardReader::getKeyEventRaw(const uint8_t& eventRaw)
