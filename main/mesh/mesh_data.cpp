@@ -2,7 +2,7 @@
  * @file mesh_data.cpp
  * @author d4rkmen
  * @brief Shared data structures for Meshtastic UI widgets with file-based storage
- * @version 2.0
+ * @version 3.0
  * @date 2025-01-03
  *
  * @copyright Copyright (c) 2025
@@ -40,13 +40,10 @@ namespace Mesh
         if (!createDirectories())
         {
             ESP_LOGW(TAG, "Failed to create message directories");
-            // Continue anyway - we'll work without persistence
         }
 
-        // Try to load existing index
         if (!loadIndex())
         {
-            // No index found, rebuild from message files
             rebuildIndex();
         }
 
@@ -59,7 +56,6 @@ namespace Mesh
     {
         struct stat st;
 
-        // Create parent meshtastic directory first
         const char* parent_dir = "/sdcard/meshtastic";
         if (stat(parent_dir, &st) != 0)
         {
@@ -71,7 +67,6 @@ namespace Mesh
             }
         }
 
-        // Create messages directory
         if (stat(MESSAGES_DIR, &st) != 0)
         {
             ESP_LOGD(TAG, "Creating directory: %s", MESSAGES_DIR);
@@ -82,7 +77,6 @@ namespace Mesh
             }
         }
 
-        // Create traceroute directory
         if (stat(TRACEROUTE_DIR, &st) != 0)
         {
             ESP_LOGD(TAG, "Creating directory: %s", TRACEROUTE_DIR);
@@ -122,260 +116,51 @@ namespace Mesh
     }
 
     //--------------------------------------------------------------------------
-    // Message File I/O
+    // Message record conversion
     //--------------------------------------------------------------------------
 
-    bool MeshDataStore::loadMessagesFromFile(const std::string& path, std::vector<TextMessage>& out) const
+    static void msgToRecord(const TextMessage& msg, TextMessageRecord& rec)
     {
-        FILE* file = fopen(path.c_str(), "rb");
-        if (!file)
-        {
-            ESP_LOGD(TAG, "Message file not found: %s", path.c_str());
-            return false;
-        }
-
-        // Read and verify header
-        uint32_t magic = 0, version = 0, count = 0;
-        if (fread(&magic, sizeof(magic), 1, file) != 1 || fread(&version, sizeof(version), 1, file) != 1 ||
-            fread(&count, sizeof(count), 1, file) != 1)
-        {
-            fclose(file);
-            return false;
-        }
-
-        if (magic != MSG_FILE_MAGIC || version != MSG_FILE_VERSION)
-        {
-            ESP_LOGW(TAG, "Invalid message file header: %s", path.c_str());
-            fclose(file);
-            return false;
-        }
-
-        out.clear();
-        out.reserve(count);
-
-        for (uint32_t i = 0; i < count; i++)
-        {
-            TextMessage msg = {};
-
-            // Read fixed fields
-            if (fread(&msg.id, sizeof(msg.id), 1, file) != 1)
-                break;
-            if (fread(&msg.from, sizeof(msg.from), 1, file) != 1)
-                break;
-            if (fread(&msg.to, sizeof(msg.to), 1, file) != 1)
-                break;
-            if (fread(&msg.timestamp, sizeof(msg.timestamp), 1, file) != 1)
-                break;
-            if (fread(&msg.channel, sizeof(msg.channel), 1, file) != 1)
-                break;
-
-            uint8_t flags = 0;
-            if (fread(&flags, sizeof(flags), 1, file) != 1)
-                break;
-            msg.is_direct = (flags & 0x01) != 0;
-            msg.read = (flags & 0x02) != 0;
-
-            uint8_t status = 0;
-            if (fread(&status, sizeof(status), 1, file) != 1)
-                break;
-            msg.status = static_cast<TextMessage::Status>(status);
-
-            // Read text length and content
-            uint16_t text_len = 0;
-            if (fread(&text_len, sizeof(text_len), 1, file) != 1)
-                break;
-
-            if (text_len > 0 && text_len < 1024)
-            {
-                std::vector<char> text_buf(text_len + 1, 0);
-                if (fread(text_buf.data(), 1, text_len, file) != text_len)
-                    break;
-                msg.text = std::string(text_buf.data());
-            }
-
-            out.push_back(msg);
-        }
-
-        fclose(file);
-        ESP_LOGD(TAG, "Loaded %d messages from %s", out.size(), path.c_str());
-        return true;
+        memset(&rec, 0, sizeof(rec));
+        rec.id = msg.id;
+        rec.from = msg.from;
+        rec.to = msg.to;
+        rec.timestamp = msg.timestamp;
+        rec.status = static_cast<uint8_t>(msg.status) | (msg.read ? 0x80 : 0);
+        rec.error_code = msg.error_code;
+        size_t len = std::min(msg.text.size(), (size_t)MSG_TEXT_MAX);
+        rec.text_len = (uint8_t)len;
+        memcpy(rec.text, msg.text.c_str(), len);
     }
 
-    bool MeshDataStore::saveMessagesToFile(const std::string& path, const std::vector<TextMessage>& messages)
+    static void recordToMsg(const TextMessageRecord& rec, TextMessage& msg, bool is_direct, uint8_t channel)
     {
-        FILE* file = fopen(path.c_str(), "wb");
-        if (!file)
-        {
-            ESP_LOGE(TAG, "Failed to open %s for writing", path.c_str());
-            return false;
-        }
-
-        // Write header
-        uint32_t magic = MSG_FILE_MAGIC;
-        uint32_t version = MSG_FILE_VERSION;
-        uint32_t count = messages.size();
-
-        fwrite(&magic, sizeof(magic), 1, file);
-        fwrite(&version, sizeof(version), 1, file);
-        fwrite(&count, sizeof(count), 1, file);
-
-        // Write each message
-        for (const auto& msg : messages)
-        {
-            fwrite(&msg.id, sizeof(msg.id), 1, file);
-            fwrite(&msg.from, sizeof(msg.from), 1, file);
-            fwrite(&msg.to, sizeof(msg.to), 1, file);
-            fwrite(&msg.timestamp, sizeof(msg.timestamp), 1, file);
-            fwrite(&msg.channel, sizeof(msg.channel), 1, file);
-
-            uint8_t flags = (msg.is_direct ? 0x01 : 0) | (msg.read ? 0x02 : 0);
-            fwrite(&flags, sizeof(flags), 1, file);
-
-            uint8_t status = static_cast<uint8_t>(msg.status);
-            fwrite(&status, sizeof(status), 1, file);
-
-            uint16_t text_len = msg.text.length();
-            fwrite(&text_len, sizeof(text_len), 1, file);
-            if (text_len > 0)
-            {
-                fwrite(msg.text.c_str(), 1, text_len, file);
-            }
-        }
-
-        fclose(file);
-        ESP_LOGD(TAG, "Saved %d messages to %s", messages.size(), path.c_str());
-        return true;
+        msg.id = rec.id;
+        msg.from = rec.from;
+        msg.to = rec.to;
+        msg.timestamp = rec.timestamp;
+        msg.channel = channel;
+        msg.is_direct = is_direct;
+        msg.read = (rec.status & 0x80) != 0;
+        msg.status = static_cast<TextMessage::Status>(rec.status & 0x7F);
+        msg.error_code = rec.error_code;
+        uint8_t len = std::min(rec.text_len, (uint8_t)MSG_TEXT_MAX);
+        msg.text = std::string(rec.text, len);
     }
 
-    bool MeshDataStore::appendMessageToFile(const std::string& path, const TextMessage& msg)
+    static inline long msgRecordOffset(uint32_t index)
     {
-        // Load existing messages (may be empty if file doesn't exist)
-        std::vector<TextMessage> messages;
-        loadMessagesFromFile(path, messages);
-
-        ESP_LOGD(TAG, "Appending message to %s (existing: %d messages)", path.c_str(), messages.size());
-
-        // Add new message
-        messages.push_back(msg);
-
-        // Limit messages per conversation
-        while (messages.size() > MAX_MESSAGES_PER_CONV)
-        {
-            messages.erase(messages.begin());
-        }
-
-        // Save back
-        bool success = saveMessagesToFile(path, messages);
-        if (!success)
-        {
-            ESP_LOGE(TAG, "Failed to save messages to %s", path.c_str());
-        }
-        return success;
+        return (long)MSG_FILE_HEADER_SIZE + (long)index * (long)sizeof(TextMessageRecord);
     }
 
     //--------------------------------------------------------------------------
-    // Message status update (in-place file modification)
+    // Message file helpers
     //--------------------------------------------------------------------------
 
-    bool MeshDataStore::updateMessageStatus(uint32_t packet_id, TextMessage::Status new_status)
-    {
-        // Scan all DM files to find the message by ID and update its status byte in-place
-        // Status byte offset within each message record:
-        //   id(4) + from(4) + to(4) + timestamp(4) + channel(1) + flags(1) = 18 bytes
-        DIR* dir = opendir(MESSAGES_DIR);
-        if (!dir)
-            return false;
-
-        struct dirent* entry;
-        bool found = false;
-        while (!found && (entry = readdir(dir)) != nullptr)
-        {
-            std::string filename(entry->d_name);
-            if (filename.length() < 4 || filename.substr(filename.length() - 4) != ".msg")
-                continue;
-
-            std::string path = std::string(MESSAGES_DIR) + "/" + filename;
-
-            // Open for read+write
-            FILE* file = fopen(path.c_str(), "r+b");
-            if (!file)
-                continue;
-
-            // Read and verify header
-            uint32_t magic = 0, version = 0, count = 0;
-            if (fread(&magic, 4, 1, file) != 1 || fread(&version, 4, 1, file) != 1 || fread(&count, 4, 1, file) != 1 ||
-                magic != MSG_FILE_MAGIC || version != MSG_FILE_VERSION)
-            {
-                fclose(file);
-                continue;
-            }
-
-            // Scan messages for matching ID
-            for (uint32_t i = 0; i < count; i++)
-            {
-                long msg_start = ftell(file);
-                uint32_t msg_id = 0;
-                if (fread(&msg_id, 4, 1, file) != 1)
-                    break;
-
-                if (msg_id == packet_id)
-                {
-                    // Found it! Seek to status byte: msg_start + 18
-                    fseek(file, msg_start + 18, SEEK_SET);
-                    uint8_t status_byte = static_cast<uint8_t>(new_status);
-                    fwrite(&status_byte, 1, 1, file);
-                    fflush(file);
-                    found = true;
-                    ESP_LOGD(TAG,
-                             "Updated message 0x%08lX status to %d in %s",
-                             (unsigned long)packet_id,
-                             (int)new_status,
-                             path.c_str());
-                    break;
-                }
-
-                // Skip to next message: already read id(4), skip from(4)+to(4)+timestamp(4)+channel(1)+flags(1)+status(1)=15
-                if (fseek(file, 15, SEEK_CUR) != 0)
-                    break;
-                uint16_t text_len = 0;
-                if (fread(&text_len, 2, 1, file) != 1)
-                    break;
-                if (text_len > 0 && fseek(file, text_len, SEEK_CUR) != 0)
-                    break;
-            }
-
-            fclose(file);
-        }
-        closedir(dir);
-
-        if (found)
-        {
-            _change_counter++;
-        }
-        else
-        {
-            ESP_LOGW(TAG, "Message 0x%08lX not found for status update", (unsigned long)packet_id);
-        }
-
-        return found;
-    }
-
-    //--------------------------------------------------------------------------
-    // Lazy-load message access (read from file without loading all into RAM)
-    //--------------------------------------------------------------------------
-
-    // Per-message fixed fields: id(4) + from(4) + to(4) + timestamp(4) + channel(1) + flags(1) + status(1) + text_len(2) = 21
-    static constexpr size_t MSG_FIXED_SIZE = 21;
-    static constexpr size_t MSG_FILE_HEADER_SIZE = 12; // magic(4) + version(4) + count(4)
-
-    /**
-     * Open a DM file, verify header, return file handle and message count.
-     * Caller must fclose the returned FILE*.
-     */
-    static FILE* openMessageFileAndReadCount(const char* path, uint32_t& out_count)
+    static FILE* openMessageFile(const char* path, uint32_t& out_count, const char* mode = "rb")
     {
         out_count = 0;
-        FILE* file = fopen(path, "rb");
+        FILE* file = fopen(path, mode);
         if (!file)
             return nullptr;
 
@@ -390,75 +175,154 @@ namespace Mesh
         return file;
     }
 
-    /**
-     * Read one message from the current file position. Returns true on success.
-     */
-    static bool readOneMessage(FILE* file, TextMessage& msg)
+    static bool readRecordAt(FILE* file, uint32_t index, TextMessageRecord& rec)
     {
-        msg = {};
-        if (fread(&msg.id, 4, 1, file) != 1)
+        if (fseek(file, msgRecordOffset(index), SEEK_SET) != 0)
             return false;
-        if (fread(&msg.from, 4, 1, file) != 1)
-            return false;
-        if (fread(&msg.to, 4, 1, file) != 1)
-            return false;
-        if (fread(&msg.timestamp, 4, 1, file) != 1)
-            return false;
-        if (fread(&msg.channel, 1, 1, file) != 1)
-            return false;
+        return fread(&rec, sizeof(rec), 1, file) == 1;
+    }
 
-        uint8_t flags = 0;
-        if (fread(&flags, 1, 1, file) != 1)
-            return false;
-        msg.is_direct = (flags & 0x01) != 0;
-        msg.read = (flags & 0x02) != 0;
+    //--------------------------------------------------------------------------
+    // Message File I/O (fixed-size TextMessageRecord, 256 bytes each)
+    //--------------------------------------------------------------------------
 
-        uint8_t status = 0;
-        if (fread(&status, 1, 1, file) != 1)
-            return false;
-        msg.status = static_cast<TextMessage::Status>(status);
+    bool MeshDataStore::appendMessageToFile(const std::string& path, const TextMessage& msg)
+    {
+        TextMessageRecord rec;
+        msgToRecord(msg, rec);
 
-        uint16_t text_len = 0;
-        if (fread(&text_len, 2, 1, file) != 1)
-            return false;
+        struct stat st;
+        bool file_exists = (stat(path.c_str(), &st) == 0);
 
-        if (text_len > 0 && text_len < 1024)
+        if (!file_exists)
         {
-            std::vector<char> buf(text_len + 1, 0);
-            if (fread(buf.data(), 1, text_len, file) != text_len)
+            FILE* file = fopen(path.c_str(), "wb");
+            if (!file)
+            {
+                ESP_LOGE(TAG, "Failed to create %s", path.c_str());
                 return false;
-            msg.text = std::string(buf.data());
+            }
+
+            uint32_t magic = MSG_FILE_MAGIC;
+            uint32_t version = MSG_FILE_VERSION;
+            uint32_t count = 1;
+            fwrite(&magic, 4, 1, file);
+            fwrite(&version, 4, 1, file);
+            fwrite(&count, 4, 1, file);
+            fwrite(&rec, sizeof(rec), 1, file);
+            fclose(file);
+
+            ESP_LOGD(TAG, "Created %s with 1 message", path.c_str());
+            return true;
         }
+
+        FILE* file = fopen(path.c_str(), "r+b");
+        if (!file)
+        {
+            ESP_LOGE(TAG, "Failed to open %s for append", path.c_str());
+            return false;
+        }
+
+        uint32_t magic = 0, version = 0, count = 0;
+        if (fread(&magic, 4, 1, file) != 1 || fread(&version, 4, 1, file) != 1 || fread(&count, 4, 1, file) != 1 ||
+            magic != MSG_FILE_MAGIC || version != MSG_FILE_VERSION)
+        {
+            fclose(file);
+            ESP_LOGW(TAG, "Corrupt message file, recreating: %s", path.c_str());
+            file = fopen(path.c_str(), "wb");
+            if (!file)
+                return false;
+
+            magic = MSG_FILE_MAGIC;
+            version = MSG_FILE_VERSION;
+            count = 1;
+            fwrite(&magic, 4, 1, file);
+            fwrite(&version, 4, 1, file);
+            fwrite(&count, 4, 1, file);
+            fwrite(&rec, sizeof(rec), 1, file);
+            fclose(file);
+            return true;
+        }
+
+        fseek(file, msgRecordOffset(count), SEEK_SET);
+        fwrite(&rec, sizeof(rec), 1, file);
+
+        count++;
+        fseek(file, 8, SEEK_SET);
+        fwrite(&count, 4, 1, file);
+        fclose(file);
+
+        ESP_LOGD(TAG, "Appended message to %s (total: %lu)", path.c_str(), (unsigned long)count);
         return true;
     }
 
-    /**
-     * Skip one message at the current file position (read only text_len, seek past text).
-     * Optionally returns the text_len.
-     */
-    static bool skipOneMessage(FILE* file, uint16_t* out_text_len = nullptr)
+    //--------------------------------------------------------------------------
+    // Message status update (in-place, iterates from newest)
+    //--------------------------------------------------------------------------
+
+    bool MeshDataStore::updateMessageStatus(
+        uint32_t packet_id, uint32_t node_id, TextMessage::Status new_status, uint8_t error_code, uint8_t channel)
     {
-        // Skip fixed fields (id + from + to + timestamp + channel + flags + status = 19 bytes)
-        if (fseek(file, 19, SEEK_CUR) != 0)
-            return false;
-        uint16_t text_len = 0;
-        if (fread(&text_len, 2, 1, file) != 1)
-            return false;
-        if (out_text_len)
-            *out_text_len = text_len;
-        if (text_len > 0)
+        std::string path = (node_id == 0xFFFFFFFF) ? getChannelFilePath(channel) : getDMFilePath(node_id);
+
+        uint32_t count = 0;
+        FILE* file = openMessageFile(path.c_str(), count, "r+b");
+        if (!file || count == 0)
         {
-            if (fseek(file, text_len, SEEK_CUR) != 0)
-                return false;
+            if (file)
+                fclose(file);
+            ESP_LOGW(TAG, "Message 0x%08lX not found in %s", (unsigned long)packet_id, path.c_str());
+            return false;
         }
-        return true;
+
+        bool found = false;
+        for (int32_t i = (int32_t)count - 1; i >= 0; i--)
+        {
+            long offset = msgRecordOffset((uint32_t)i);
+            fseek(file, offset, SEEK_SET);
+
+            uint32_t msg_id = 0;
+            if (fread(&msg_id, 4, 1, file) != 1)
+                break;
+
+            if (msg_id == packet_id)
+            {
+                long status_off = offset + offsetof(TextMessageRecord, status);
+                fseek(file, status_off, SEEK_SET);
+                uint8_t st = static_cast<uint8_t>(new_status);
+                fwrite(&st, 1, 1, file);
+                fwrite(&error_code, 1, 1, file);
+                fflush(file);
+                found = true;
+                ESP_LOGD(TAG,
+                         "Updated message 0x%08lX status=%d err=%d in %s",
+                         (unsigned long)packet_id,
+                         (int)new_status,
+                         (int)error_code,
+                         path.c_str());
+                break;
+            }
+        }
+
+        fclose(file);
+
+        if (found)
+            _change_counter++;
+        else
+            ESP_LOGW(TAG, "Message 0x%08lX not found in %s", (unsigned long)packet_id, path.c_str());
+
+        return found;
     }
+
+    //--------------------------------------------------------------------------
+    // Lazy-load message access (direct seek by index, O(1) per record)
+    //--------------------------------------------------------------------------
 
     uint32_t MeshDataStore::getDMMessageCount(uint32_t node_id) const
     {
         std::string path = getDMFilePath(node_id);
         uint32_t count = 0;
-        FILE* file = openMessageFileAndReadCount(path.c_str(), count);
+        FILE* file = openMessageFile(path.c_str(), count);
         if (file)
             fclose(file);
         return count;
@@ -474,7 +338,7 @@ namespace Mesh
     {
         std::string path = getDMFilePath(node_id);
         uint32_t count = 0;
-        FILE* file = openMessageFileAndReadCount(path.c_str(), count);
+        FILE* file = openMessageFile(path.c_str(), count);
         if (!file || index >= count)
         {
             if (file)
@@ -482,18 +346,11 @@ namespace Mesh
             return false;
         }
 
-        // Skip messages before the target index
-        for (uint32_t i = 0; i < index; i++)
-        {
-            if (!skipOneMessage(file))
-            {
-                fclose(file);
-                return false;
-            }
-        }
-
-        bool ok = readOneMessage(file, out);
+        TextMessageRecord rec;
+        bool ok = readRecordAt(file, index, rec);
         fclose(file);
+        if (ok)
+            recordToMsg(rec, out, true, 0);
         return ok;
     }
 
@@ -502,7 +359,7 @@ namespace Mesh
     {
         std::string path = getDMFilePath(node_id);
         uint32_t total = 0;
-        FILE* file = openMessageFileAndReadCount(path.c_str(), total);
+        FILE* file = openMessageFile(path.c_str(), total);
         if (!file || start >= total)
         {
             if (file)
@@ -510,24 +367,17 @@ namespace Mesh
             return 0;
         }
 
-        // Skip messages before start
-        for (uint32_t i = 0; i < start; i++)
-        {
-            if (!skipOneMessage(file))
-            {
-                fclose(file);
-                return (uint32_t)out.size();
-            }
-        }
-
-        // Read requested range
         uint32_t to_read = std::min(count, total - start);
+        fseek(file, msgRecordOffset(start), SEEK_SET);
+
         uint32_t loaded = 0;
         for (uint32_t i = 0; i < to_read; i++)
         {
-            TextMessage msg;
-            if (!readOneMessage(file, msg))
+            TextMessageRecord rec;
+            if (fread(&rec, sizeof(rec), 1, file) != 1)
                 break;
+            TextMessage msg;
+            recordToMsg(rec, msg, true, 0);
             out.push_back(std::move(msg));
             loaded++;
         }
@@ -540,7 +390,7 @@ namespace Mesh
     {
         std::string path = getDMFilePath(node_id);
         uint32_t count = 0;
-        FILE* file = openMessageFileAndReadCount(path.c_str(), count);
+        FILE* file = openMessageFile(path.c_str(), count);
         if (!file)
             return 0;
 
@@ -549,8 +399,10 @@ namespace Mesh
 
         for (uint32_t i = 0; i < count; i++)
         {
-            uint16_t tlen = 0;
-            if (!skipOneMessage(file, &tlen))
+            long offset = msgRecordOffset(i) + offsetof(TextMessageRecord, text_len);
+            fseek(file, offset, SEEK_SET);
+            uint8_t tlen = 0;
+            if (fread(&tlen, 1, 1, file) != 1)
                 break;
             text_lengths.push_back(tlen);
         }
@@ -564,16 +416,19 @@ namespace Mesh
     {
         std::string path = getDMFilePath(node_id);
         uint32_t count = 0;
-        FILE* file = openMessageFileAndReadCount(path.c_str(), count);
+        FILE* file = openMessageFile(path.c_str(), count);
         if (!file)
             return 0;
 
+        fseek(file, msgRecordOffset(0), SEEK_SET);
         uint32_t iterated = 0;
         for (uint32_t i = 0; i < count; i++)
         {
-            TextMessage msg;
-            if (!readOneMessage(file, msg))
+            TextMessageRecord rec;
+            if (fread(&rec, sizeof(rec), 1, file) != 1)
                 break;
+            TextMessage msg;
+            recordToMsg(rec, msg, true, 0);
             iterated++;
             if (!callback(i, msg))
                 break;
@@ -584,14 +439,14 @@ namespace Mesh
     }
 
     //--------------------------------------------------------------------------
-    // Channel lazy-loading (mirrors DM methods using getChannelFilePath)
+    // Channel lazy-loading (mirrors DM methods)
     //--------------------------------------------------------------------------
 
     uint32_t MeshDataStore::getChannelMessageCount(uint8_t channel) const
     {
         std::string path = getChannelFilePath(channel);
         uint32_t count = 0;
-        FILE* file = openMessageFileAndReadCount(path.c_str(), count);
+        FILE* file = openMessageFile(path.c_str(), count);
         if (file)
             fclose(file);
         return count;
@@ -602,7 +457,7 @@ namespace Mesh
     {
         std::string path = getChannelFilePath(channel);
         uint32_t total = 0;
-        FILE* file = openMessageFileAndReadCount(path.c_str(), total);
+        FILE* file = openMessageFile(path.c_str(), total);
         if (!file || start >= total)
         {
             if (file)
@@ -610,22 +465,17 @@ namespace Mesh
             return 0;
         }
 
-        for (uint32_t i = 0; i < start; i++)
-        {
-            if (!skipOneMessage(file))
-            {
-                fclose(file);
-                return (uint32_t)out.size();
-            }
-        }
-
         uint32_t to_read = std::min(count, total - start);
+        fseek(file, msgRecordOffset(start), SEEK_SET);
+
         uint32_t loaded = 0;
         for (uint32_t i = 0; i < to_read; i++)
         {
-            TextMessage msg;
-            if (!readOneMessage(file, msg))
+            TextMessageRecord rec;
+            if (fread(&rec, sizeof(rec), 1, file) != 1)
                 break;
+            TextMessage msg;
+            recordToMsg(rec, msg, false, channel);
             out.push_back(std::move(msg));
             loaded++;
         }
@@ -639,16 +489,19 @@ namespace Mesh
     {
         std::string path = getChannelFilePath(channel);
         uint32_t count = 0;
-        FILE* file = openMessageFileAndReadCount(path.c_str(), count);
+        FILE* file = openMessageFile(path.c_str(), count);
         if (!file)
             return 0;
 
+        fseek(file, msgRecordOffset(0), SEEK_SET);
         uint32_t iterated = 0;
         for (uint32_t i = 0; i < count; i++)
         {
-            TextMessage msg;
-            if (!readOneMessage(file, msg))
+            TextMessageRecord rec;
+            if (fread(&rec, sizeof(rec), 1, file) != 1)
                 break;
+            TextMessage msg;
+            recordToMsg(rec, msg, false, channel);
             iterated++;
             if (!callback(i, msg))
                 break;
@@ -671,7 +524,6 @@ namespace Mesh
             return false;
         }
 
-        // Read and verify header
         uint32_t magic = 0, version = 0, count = 0;
         if (fread(&magic, sizeof(magic), 1, file) != 1 || fread(&version, sizeof(version), 1, file) != 1 ||
             fread(&count, sizeof(count), 1, file) != 1)
@@ -728,7 +580,6 @@ namespace Mesh
             return false;
         }
 
-        // Write header
         uint32_t magic = MSG_INDEX_MAGIC;
         uint32_t version = MSG_FILE_VERSION;
         uint32_t count = _message_index.size();
@@ -737,7 +588,6 @@ namespace Mesh
         fwrite(&version, sizeof(version), 1, file);
         fwrite(&count, sizeof(count), 1, file);
 
-        // Write entries
         for (const auto& entry : _message_index)
         {
             fwrite(&entry.node_id, sizeof(entry.node_id), 1, file);
@@ -753,6 +603,45 @@ namespace Mesh
 
         fclose(file);
         ESP_LOGD(TAG, "Saved message index with %d entries", _message_index.size());
+        return true;
+    }
+
+    static bool scanMessageFileForIndex(
+        const char* path, uint32_t filter_node_id, bool is_dm, uint32_t& out_count, uint32_t& out_unread, uint32_t& out_last_ts)
+    {
+        out_count = 0;
+        out_unread = 0;
+        out_last_ts = 0;
+
+        uint32_t count = 0;
+        FILE* file = openMessageFile(path, count);
+        if (!file || count == 0)
+        {
+            if (file)
+                fclose(file);
+            return false;
+        }
+
+        out_count = count;
+
+        for (uint32_t i = 0; i < count; i++)
+        {
+            TextMessageRecord rec;
+            if (!readRecordAt(file, i, rec))
+                break;
+
+            bool is_read = (rec.status & 0x80) != 0;
+            if (!is_read)
+            {
+                if (!is_dm || rec.from == filter_node_id)
+                    out_unread++;
+            }
+
+            if (rec.timestamp > out_last_ts)
+                out_last_ts = rec.timestamp;
+        }
+
+        fclose(file);
         return true;
     }
 
@@ -773,61 +662,41 @@ namespace Mesh
         {
             std::string filename(entry->d_name);
 
-            // Check for DM files (xxxxxxxx.msg)
             if (filename.length() == 12 && filename.substr(8) == ".msg")
             {
                 uint32_t node_id = 0;
                 if (sscanf(filename.c_str(), "%08lx", (unsigned long*)&node_id) == 1)
                 {
                     std::string path = getDMFilePath(node_id);
-                    std::vector<TextMessage> messages;
-                    if (loadMessagesFromFile(path, messages) && !messages.empty())
+                    uint32_t count = 0, unread = 0, last_ts = 0;
+                    if (scanMessageFileForIndex(path.c_str(), node_id, true, count, unread, last_ts))
                     {
                         MessageIndexEntry idx = {};
                         idx.node_id = node_id;
                         idx.is_direct = true;
-                        idx.message_count = messages.size();
-                        idx.unread_count = 0;
-                        idx.last_timestamp = messages.back().timestamp;
-
-                        for (const auto& msg : messages)
-                        {
-                            if (!msg.read && msg.from == node_id)
-                            {
-                                idx.unread_count++;
-                            }
-                        }
-
+                        idx.message_count = count;
+                        idx.unread_count = unread;
+                        idx.last_timestamp = last_ts;
                         _message_index.push_back(idx);
                     }
                 }
             }
-            // Check for channel files (ch_X.msg)
             else if (filename.length() >= 7 && filename.substr(0, 3) == "ch_")
             {
                 int channel = -1;
                 if (sscanf(filename.c_str(), "ch_%d.msg", &channel) == 1 && channel >= 0 && channel < 8)
                 {
                     std::string path = getChannelFilePath((uint8_t)channel);
-                    std::vector<TextMessage> messages;
-                    if (loadMessagesFromFile(path, messages) && !messages.empty())
+                    uint32_t count = 0, unread = 0, last_ts = 0;
+                    if (scanMessageFileForIndex(path.c_str(), 0, false, count, unread, last_ts))
                     {
                         MessageIndexEntry idx = {};
                         idx.node_id = 0;
                         idx.channel = (uint8_t)channel;
                         idx.is_direct = false;
-                        idx.message_count = messages.size();
-                        idx.unread_count = 0;
-                        idx.last_timestamp = messages.back().timestamp;
-
-                        for (const auto& msg : messages)
-                        {
-                            if (!msg.read)
-                            {
-                                idx.unread_count++;
-                            }
-                        }
-
+                        idx.message_count = count;
+                        idx.unread_count = unread;
+                        idx.last_timestamp = last_ts;
                         _message_index.push_back(idx);
                     }
                 }
@@ -848,16 +717,12 @@ namespace Mesh
             if (is_direct)
             {
                 if (entry.is_direct && entry.node_id == node_id)
-                {
                     return &entry;
-                }
             }
             else
             {
                 if (!entry.is_direct && entry.channel == (uint8_t)node_id)
-                {
                     return &entry;
-                }
             }
         }
         return nullptr;
@@ -870,16 +735,12 @@ namespace Mesh
             if (is_direct)
             {
                 if (entry.is_direct && entry.node_id == node_id)
-                {
                     return &entry;
-                }
             }
             else
             {
                 if (!entry.is_direct && entry.channel == (uint8_t)node_id)
-                {
                     return &entry;
-                }
             }
         }
         return nullptr;
@@ -895,17 +756,12 @@ namespace Mesh
             entry->message_count += count_delta;
             entry->unread_count += unread_delta;
             if (entry->unread_count > entry->message_count)
-            {
                 entry->unread_count = entry->message_count;
-            }
             if (timestamp > entry->last_timestamp)
-            {
                 entry->last_timestamp = timestamp;
-            }
         }
         else
         {
-            // Create new entry
             MessageIndexEntry new_entry = {};
             new_entry.node_id = is_direct ? node_id : 0;
             new_entry.channel = channel;
@@ -916,7 +772,6 @@ namespace Mesh
             _message_index.push_back(new_entry);
         }
 
-        // Save index after update
         saveIndex();
     }
 
@@ -926,19 +781,14 @@ namespace Mesh
 
     void MeshDataStore::addMessage(const TextMessage& msg)
     {
-        // Auto-initialize if not already done
         if (!_initialized)
-        {
             init();
-        }
 
         std::string path;
         uint32_t index_id;
 
         if (msg.is_direct)
         {
-            // For DMs, use the other party's node ID
-            // If we sent it (read=true), use destination; if received (read=false), use sender
             index_id = (msg.from != 0 && msg.to != 0) ? (msg.read ? msg.to : msg.from) : (msg.from != 0 ? msg.from : msg.to);
             path = getDMFilePath(index_id);
             ESP_LOGI(TAG,
@@ -954,10 +804,8 @@ namespace Mesh
             ESP_LOGI(TAG, "Adding channel message: channel=%d", msg.channel);
         }
 
-        // Append to file
         if (appendMessageToFile(path, msg))
         {
-            // Update index - increment unread count if message is unread
             int unread_delta = msg.read ? 0 : 1;
             updateIndexEntry(index_id, msg.is_direct, msg.channel, 1, unread_delta, msg.timestamp);
             _change_counter++;
@@ -977,29 +825,15 @@ namespace Mesh
 
     std::vector<TextMessage> MeshDataStore::getDirectMessages(uint32_t node_id) const
     {
-        std::string path = getDMFilePath(node_id);
         std::vector<TextMessage> messages;
-        loadMessagesFromFile(path, messages);
-
-        // Sort by timestamp
-        // std::sort(messages.begin(),
-        //           messages.end(),
-        //           [](const TextMessage& a, const TextMessage& b) { return a.timestamp < b.timestamp; });
-
+        getDMMessageRange(node_id, 0, UINT32_MAX, messages);
         return messages;
     }
 
     std::vector<TextMessage> MeshDataStore::getChannelMessages(uint8_t channel) const
     {
-        std::string path = getChannelFilePath(channel);
         std::vector<TextMessage> messages;
-        loadMessagesFromFile(path, messages);
-
-        // Sort by timestamp
-        // std::sort(messages.begin(),
-        //           messages.end(),
-        //           [](const TextMessage& a, const TextMessage& b) { return a.timestamp < b.timestamp; });
-
+        getChannelMessageRange(channel, 0, UINT32_MAX, messages);
         return messages;
     }
 
@@ -1017,40 +851,38 @@ namespace Mesh
 
     void MeshDataStore::markMessagesRead(uint32_t id, bool is_channel)
     {
-        std::string path;
-        if (is_channel)
-        {
-            path = getChannelFilePath((uint8_t)id);
-        }
-        else
-        {
-            path = getDMFilePath(id);
-        }
+        std::string path = is_channel ? getChannelFilePath((uint8_t)id) : getDMFilePath(id);
 
-        // Load messages
-        std::vector<TextMessage> messages;
-        if (!loadMessagesFromFile(path, messages))
-        {
+        uint32_t count = 0;
+        FILE* file = openMessageFile(path.c_str(), count, "r+b");
+        if (!file)
             return;
-        }
 
-        // Mark all as read
         bool changed = false;
-        for (auto& msg : messages)
+        for (uint32_t i = 0; i < count; i++)
         {
-            if (!msg.read)
+            long status_off = msgRecordOffset(i) + offsetof(TextMessageRecord, status);
+            fseek(file, status_off, SEEK_SET);
+
+            uint8_t st = 0;
+            if (fread(&st, 1, 1, file) != 1)
+                break;
+
+            if (!(st & 0x80))
             {
-                msg.read = true;
+                st |= 0x80;
+                fseek(file, status_off, SEEK_SET);
+                fwrite(&st, 1, 1, file);
                 changed = true;
             }
         }
 
         if (changed)
-        {
-            // Save back
-            saveMessagesToFile(path, messages);
+            fflush(file);
+        fclose(file);
 
-            // Update index
+        if (changed)
+        {
             MessageIndexEntry* entry = findIndexEntry(id, !is_channel);
             if (entry)
             {
@@ -1062,7 +894,6 @@ namespace Mesh
 
     void MeshDataStore::clearMessages()
     {
-        // Delete all message files
         DIR* dir = opendir(MESSAGES_DIR);
         if (dir)
         {
@@ -1079,7 +910,6 @@ namespace Mesh
             closedir(dir);
         }
 
-        // Clear index
         _message_index.clear();
         saveIndex();
         _change_counter++;
@@ -1091,26 +921,18 @@ namespace Mesh
     {
         std::string path;
         if (is_channel)
-        {
             path = getChannelFilePath((uint8_t)node_id);
-        }
         else
-        {
             path = getDMFilePath(node_id);
-        }
 
-        // Delete the file
         remove(path.c_str());
 
-        // Remove from index
         auto it = std::find_if(_message_index.begin(),
                                _message_index.end(),
                                [node_id, is_channel](const MessageIndexEntry& e)
                                {
                                    if (is_channel)
-                                   {
                                        return !e.is_direct && e.channel == (uint8_t)node_id;
-                                   }
                                    return e.is_direct && e.node_id == node_id;
                                });
 
@@ -1130,9 +952,7 @@ namespace Mesh
         for (const auto& entry : _message_index)
         {
             if (entry.is_direct && entry.unread_count > 0)
-            {
                 result.push_back(entry.node_id);
-            }
         }
         return result;
     }
@@ -1143,9 +963,7 @@ namespace Mesh
         for (const auto& entry : _message_index)
         {
             if (entry.is_direct)
-            {
                 total += entry.unread_count;
-            }
         }
         return total;
     }
@@ -1156,9 +974,7 @@ namespace Mesh
         for (const auto& entry : _message_index)
         {
             if (!entry.is_direct)
-            {
                 total += entry.unread_count;
-            }
         }
         return total;
     }
@@ -1200,7 +1016,6 @@ namespace Mesh
     }
 
     //--------------------------------------------------------------------------
-    //--------------------------------------------------------------------------
     // Node data removal
     //--------------------------------------------------------------------------
 
@@ -1237,9 +1052,7 @@ namespace Mesh
         _battery_history.push_back(point);
 
         while (_battery_history.size() > MAX_GRAPH_POINTS)
-        {
             _battery_history.erase(_battery_history.begin());
-        }
     }
 
     void MeshDataStore::addChannelActivityPoint(float packets_per_min)
@@ -1250,9 +1063,7 @@ namespace Mesh
         _channel_activity.push_back(point);
 
         while (_channel_activity.size() > MAX_GRAPH_POINTS)
-        {
             _channel_activity.erase(_channel_activity.begin());
-        }
     }
 
     void MeshDataStore::addRssiPoint(uint32_t node_id, int16_t rssi)
@@ -1265,18 +1076,14 @@ namespace Mesh
         history.push_back(point);
 
         while (history.size() > MAX_GRAPH_POINTS)
-        {
             history.erase(history.begin());
-        }
     }
 
     std::vector<GraphPoint> MeshDataStore::getRssiHistory(uint32_t node_id) const
     {
         auto it = _rssi_history.find(node_id);
         if (it != _rssi_history.end())
-        {
             return it->second;
-        }
         return {};
     }
 
@@ -1423,7 +1230,6 @@ namespace Mesh
     {
         std::string path = getTraceRouteFilePath(node_id);
 
-        // Read existing records
         std::vector<TraceRouteRecord> records;
         FILE* file = fopen(path.c_str(), "rb");
         if (file)
@@ -1445,18 +1251,15 @@ namespace Mesh
             fclose(file);
         }
 
-        // Append new record
         TraceRouteRecord rec;
         trResultToRecord(result, rec);
         records.push_back(rec);
 
-        // Trim oldest if over limit
         while (records.size() > MAX_TRACEROUTES_PER_NODE)
             records.erase(records.begin());
 
         uint32_t new_index = (uint32_t)(records.size() - 1);
 
-        // Write back
         file = fopen(path.c_str(), "wb");
         if (!file)
         {

@@ -447,10 +447,15 @@ namespace Mesh
          * @param out_raw_len    If non-null, receives the raw packet length
          * @return Generated packet ID on success, 0 on failure
          */
-        uint32_t encryptAndSend(const uint8_t* data_buf, size_t data_len,
-                                uint32_t dest, bool want_ack, uint8_t hop_limit,
-                                PacketPriority priority, meshtastic_PortNum port_num,
-                                uint8_t* out_raw_buf = nullptr, size_t* out_raw_len = nullptr);
+        uint32_t encryptAndSend(const uint8_t* data_buf,
+                                size_t data_len,
+                                uint32_t dest,
+                                bool want_ack,
+                                uint8_t hop_limit,
+                                PacketPriority priority,
+                                meshtastic_PortNum port_num,
+                                uint8_t* out_raw_buf = nullptr,
+                                size_t* out_raw_len = nullptr);
 
         // New-node greeting
         void sendNewNodeGreeting(uint32_t node_id, uint8_t channel, uint8_t hops, int16_t rssi, float snr);
@@ -536,6 +541,8 @@ namespace Mesh
         struct PendingAck
         {
             uint32_t send_time_ms;              // When the (re)send was initiated
+            uint32_t dest_node_id;              // Destination node (for direct file lookup)
+            uint8_t channel;                    // Channel index (for channel message file lookup)
             uint8_t retries_left;               // Retries remaining (0 = final attempt)
             uint8_t raw_data[MAX_LORA_PAYLOAD]; // Raw on-air packet for retransmission
             uint8_t raw_len;                    // Length of raw_data

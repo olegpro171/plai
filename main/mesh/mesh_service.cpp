@@ -441,10 +441,10 @@ namespace Mesh
           _gps(nullptr), _gps_queue(nullptr), _nodedb(nullptr), _router(), _config(), _state(MeshState::UNINITIALIZED),
           _message_callback(nullptr), _battery_callback(nullptr), _fromradio_state(FromRadioState::IDLE),
           _fromradio_config_id(0), _fromradio_node_index(0), _fromradio_channel_index(0), _last_nodeinfo_broadcast_ms(0),
-          _force_nodeinfo_broadcast(false), _last_neighborinfo_broadcast_ms(0), _last_position_broadcast_ms(0), _last_telemetry_broadcast_ms(0),
-          _tx_in_progress(false), _last_tx_start_ms(0), _last_rx_rssi(0), _last_rx_snr(0.0f), _airtime_window_start_ms(0),
-          _airtime_tx_ms(0), _airtime_rx_ms(0), _airtime_tx_ms_prev(0), _airtime_rx_ms_prev(0), _slot_time_ms(28),
-          _tx_not_before_ms(0), _cad_in_progress(false)
+          _force_nodeinfo_broadcast(false), _last_neighborinfo_broadcast_ms(0), _last_position_broadcast_ms(0),
+          _last_telemetry_broadcast_ms(0), _tx_in_progress(false), _last_tx_start_ms(0), _last_rx_rssi(0), _last_rx_snr(0.0f),
+          _airtime_window_start_ms(0), _airtime_tx_ms(0), _airtime_rx_ms(0), _airtime_tx_ms_prev(0), _airtime_rx_ms_prev(0),
+          _slot_time_ms(28), _tx_not_before_ms(0), _cad_in_progress(false)
     {
         _hal = hal;
         memset(&_config, 0, sizeof(_config));
@@ -747,7 +747,11 @@ namespace Mesh
                              "ACK timeout for packet 0x%08lX, no retries left (waited %lums)",
                              (unsigned long)it->first,
                              (unsigned long)(now - it->second.send_time_ms));
-                    MeshDataStore::getInstance().updateMessageStatus(it->first, TextMessage::Status::FAILED);
+                    MeshDataStore::getInstance().updateMessageStatus(it->first,
+                                                                     it->second.dest_node_id,
+                                                                     TextMessage::Status::FAILED,
+                                                                     (uint8_t)meshtastic_Routing_Error_TIMEOUT,
+                                                                     it->second.channel);
                     it = _pending_acks.erase(it);
                 }
             }
@@ -955,6 +959,8 @@ namespace Mesh
                 }
                 PendingAck pa = {};
                 pa.send_time_ms = now;
+                pa.dest_node_id = dest;
+                pa.channel = channel;
                 pa.retries_left = MAX_TX_RETRIES;
                 pa.raw_len = (uint8_t)radio_len;
                 pa.port_hint = meshtastic_PortNum_TEXT_MESSAGE_APP;
@@ -990,10 +996,15 @@ namespace Mesh
 
         uint8_t raw_buf[MAX_LORA_PAYLOAD];
         size_t raw_len = 0;
-        uint32_t packet_id = encryptAndSend(
-            data_buf, data_stream.bytes_written, dest, true,
-            _config.lora_config.hop_limit, PacketPriority::RELIABLE,
-            port_num, raw_buf, &raw_len);
+        uint32_t packet_id = encryptAndSend(data_buf,
+                                            data_stream.bytes_written,
+                                            dest,
+                                            true,
+                                            _config.lora_config.hop_limit,
+                                            PacketPriority::RELIABLE,
+                                            port_num,
+                                            raw_buf,
+                                            &raw_len);
 
         if (packet_id == 0)
             return false;
@@ -1011,6 +1022,7 @@ namespace Mesh
         }
         PendingAck pa = {};
         pa.send_time_ms = now;
+        pa.dest_node_id = dest;
         pa.retries_left = MAX_TX_RETRIES;
         pa.raw_len = (uint8_t)raw_len;
         pa.port_hint = port_num;
@@ -2068,7 +2080,11 @@ namespace Mesh
                          "Implicit ACK: packet 0x%08lX rebroadcast by relay 0x%02X",
                          (unsigned long)packet.id,
                          packet.relay_node);
-                MeshDataStore::getInstance().updateMessageStatus(packet.id, TextMessage::Status::ACK);
+                MeshDataStore::getInstance().updateMessageStatus(packet.id,
+                                                                 it->second.dest_node_id,
+                                                                 TextMessage::Status::ACK,
+                                                                 0,
+                                                                 it->second.channel);
                 _pending_acks.erase(it);
             }
             return;
@@ -2376,6 +2392,10 @@ namespace Mesh
                 {
                     // This is an ACK/NACK for a packet we sent
                     uint32_t orig_id = decoded_packet.decoded.request_id;
+                    auto pa_it = _pending_acks.find(orig_id);
+                    uint32_t dest_id = (pa_it != _pending_acks.end()) ? pa_it->second.dest_node_id : decoded_packet.from;
+                    uint8_t pa_channel = (pa_it != _pending_acks.end()) ? pa_it->second.channel : decoded_packet.channel;
+
                     meshtastic_Routing routing = meshtastic_Routing_init_default;
                     pb_istream_t routing_stream =
                         pb_istream_from_buffer(decoded_packet.decoded.payload.bytes, decoded_packet.decoded.payload.size);
@@ -2389,7 +2409,11 @@ namespace Mesh
                                      "ACK received for packet 0x%08lX from 0x%08lX",
                                      (unsigned long)orig_id,
                                      (unsigned long)decoded_packet.from);
-                            MeshDataStore::getInstance().updateMessageStatus(orig_id, TextMessage::Status::DELIVERED);
+                            MeshDataStore::getInstance().updateMessageStatus(orig_id,
+                                                                             dest_id,
+                                                                             TextMessage::Status::DELIVERED,
+                                                                             0,
+                                                                             pa_channel);
                         }
                         else
                         {
@@ -2397,7 +2421,11 @@ namespace Mesh
                                      "NACK received for packet 0x%08lX, error=%d",
                                      (unsigned long)orig_id,
                                      (int)routing.error_reason);
-                            MeshDataStore::getInstance().updateMessageStatus(orig_id, TextMessage::Status::NACK);
+                            MeshDataStore::getInstance().updateMessageStatus(orig_id,
+                                                                             dest_id,
+                                                                             TextMessage::Status::NACK,
+                                                                             (uint8_t)routing.error_reason,
+                                                                             pa_channel);
                         }
                     }
                     else
@@ -2405,7 +2433,8 @@ namespace Mesh
                         ESP_LOGW(TAG, "Failed to decode Routing message from 0x%08lX", (unsigned long)decoded_packet.from);
                     }
                     // Remove from pending ACK tracking regardless of result
-                    _pending_acks.erase(orig_id);
+                    if (pa_it != _pending_acks.end())
+                        _pending_acks.erase(pa_it);
                 }
                 break;
 
@@ -2830,8 +2859,12 @@ namespace Mesh
                 return;
             }
 
-            uint32_t pid = encryptAndSend(data_buf, data_stream.bytes_written, packet.from, false,
-                                          _config.lora_config.hop_limit, PacketPriority::DEFAULT,
+            uint32_t pid = encryptAndSend(data_buf,
+                                          data_stream.bytes_written,
+                                          packet.from,
+                                          false,
+                                          _config.lora_config.hop_limit,
+                                          PacketPriority::DEFAULT,
                                           meshtastic_PortNum_TRACEROUTE_APP);
             if (pid)
                 ESP_LOGI(TAG, "TraceRoute response sent to 0x%08lX", (unsigned long)packet.from);
@@ -2961,8 +2994,12 @@ namespace Mesh
             return false;
         }
 
-        uint32_t pid = encryptAndSend(data_buf, data_stream.bytes_written, dest, false,
-                                      _config.lora_config.hop_limit, PacketPriority::DEFAULT,
+        uint32_t pid = encryptAndSend(data_buf,
+                                      data_stream.bytes_written,
+                                      dest,
+                                      false,
+                                      _config.lora_config.hop_limit,
+                                      PacketPriority::DEFAULT,
                                       meshtastic_PortNum_TRACEROUTE_APP);
         if (pid)
         {
@@ -3289,10 +3326,15 @@ namespace Mesh
         sendNodeInfo(0xFFFFFFFF, 0, false);
     }
 
-    uint32_t MeshService::encryptAndSend(const uint8_t* data_buf, size_t data_len,
-                                         uint32_t dest, bool want_ack, uint8_t hop_limit,
-                                         PacketPriority priority, meshtastic_PortNum port_num,
-                                         uint8_t* out_raw_buf, size_t* out_raw_len)
+    uint32_t MeshService::encryptAndSend(const uint8_t* data_buf,
+                                         size_t data_len,
+                                         uint32_t dest,
+                                         bool want_ack,
+                                         uint8_t hop_limit,
+                                         PacketPriority priority,
+                                         meshtastic_PortNum port_num,
+                                         uint8_t* out_raw_buf,
+                                         size_t* out_raw_len)
     {
         uint8_t key[32] = {};
         size_t key_len = 0;
@@ -3442,8 +3484,13 @@ namespace Mesh
         }
 
         PacketPriority priority = is_broadcast ? PacketPriority::BACKGROUND : PacketPriority::DEFAULT;
-        uint32_t pid = encryptAndSend(data_buf, data_stream.bytes_written, dest, false,
-                                      _config.lora_config.hop_limit, priority, meshtastic_PortNum_NODEINFO_APP);
+        uint32_t pid = encryptAndSend(data_buf,
+                                      data_stream.bytes_written,
+                                      dest,
+                                      false,
+                                      _config.lora_config.hop_limit,
+                                      priority,
+                                      meshtastic_PortNum_NODEINFO_APP);
         if (pid)
         {
             if (is_broadcast)
@@ -3507,8 +3554,12 @@ namespace Mesh
             return;
         }
 
-        uint32_t pid = encryptAndSend(data_buf, data_stream.bytes_written, dest, false,
-                                      _config.lora_config.hop_limit, PacketPriority::DEFAULT,
+        uint32_t pid = encryptAndSend(data_buf,
+                                      data_stream.bytes_written,
+                                      dest,
+                                      false,
+                                      _config.lora_config.hop_limit,
+                                      PacketPriority::DEFAULT,
                                       meshtastic_PortNum_NEIGHBORINFO_APP);
         if (pid)
             ESP_LOGI(TAG, "NeighborInfo sent to 0x%08lX", (unsigned long)dest);
@@ -3677,8 +3728,13 @@ namespace Mesh
 
         bool is_broadcast = (dest == 0xFFFFFFFF);
         PacketPriority priority = is_broadcast ? PacketPriority::BACKGROUND : PacketPriority::DEFAULT;
-        uint32_t pid = encryptAndSend(data_buf, data_stream.bytes_written, dest, false,
-                                      _config.lora_config.hop_limit, priority, meshtastic_PortNum_POSITION_APP);
+        uint32_t pid = encryptAndSend(data_buf,
+                                      data_stream.bytes_written,
+                                      dest,
+                                      false,
+                                      _config.lora_config.hop_limit,
+                                      priority,
+                                      meshtastic_PortNum_POSITION_APP);
         if (pid)
         {
             ESP_LOGI(TAG, "Position packet queued to 0x%08lX", (unsigned long)dest);
@@ -3919,8 +3975,12 @@ namespace Mesh
             return false;
         }
 
-        uint32_t pid = encryptAndSend(data_buf, data_stream.bytes_written, dest, false,
-                                      _config.lora_config.hop_limit, PacketPriority::BACKGROUND,
+        uint32_t pid = encryptAndSend(data_buf,
+                                      data_stream.bytes_written,
+                                      dest,
+                                      false,
+                                      _config.lora_config.hop_limit,
+                                      PacketPriority::BACKGROUND,
                                       meshtastic_PortNum_TELEMETRY_APP);
         if (pid)
         {
@@ -3992,8 +4052,13 @@ namespace Mesh
             return false;
         }
 
-        uint32_t pid = encryptAndSend(data_buf, data_stream.bytes_written, to, false,
-                                      hop_limit, PacketPriority::ACK, meshtastic_PortNum_ROUTING_APP);
+        uint32_t pid = encryptAndSend(data_buf,
+                                      data_stream.bytes_written,
+                                      to,
+                                      false,
+                                      hop_limit,
+                                      PacketPriority::ACK,
+                                      meshtastic_PortNum_ROUTING_APP);
         if (pid)
         {
             ESP_LOGI(TAG, "Routing reply sent to 0x%08lX (error=%d)", (unsigned long)to, (int)error_code);

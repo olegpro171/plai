@@ -23,14 +23,6 @@
 namespace Mesh
 {
     /**
-     * @brief Maximum entries in packet log
-     */
-    /**
-     * @brief Maximum messages to store per conversation
-     */
-    constexpr size_t MAX_MESSAGES_PER_CONV = 50;
-
-    /**
      * @brief Storage paths for messages
      */
     constexpr const char* MESSAGES_DIR = "/sdcard/meshtastic/messages";
@@ -42,11 +34,13 @@ namespace Mesh
     constexpr const char* TRACEROUTE_DIR = "/sdcard/meshtastic/traceroute";
 
     /**
-     * @brief Message file magic number
+     * @brief Message file constants
      */
-    constexpr uint32_t MSG_FILE_MAGIC = 0x4753534D; // "MSSG" in little-endian
-    constexpr uint32_t MSG_FILE_VERSION = 1;
+    constexpr uint32_t MSG_FILE_MAGIC = 0x4753534D;  // "MSSG" in little-endian
+    constexpr uint32_t MSG_FILE_VERSION = 3;         // v3: removed channel/flags from record
     constexpr uint32_t MSG_INDEX_MAGIC = 0x5844494D; // "MIDX" in little-endian
+    constexpr size_t MSG_FILE_HEADER_SIZE = 12;      // magic(4) + version(4) + count(4)
+    constexpr size_t MSG_TEXT_MAX = 235;             // max text bytes per message
 
     /**
      * @brief Traceroute file magic and limits
@@ -83,7 +77,24 @@ namespace Mesh
     static_assert(sizeof(TraceRouteRecord) == 95, "TraceRouteRecord must be 95 bytes");
 
     /**
-     * @brief Text message storage (used by both Nodes DM and Channels)
+     * @brief Fixed-size on-disk message record (256 bytes)
+     */
+    struct __attribute__((packed)) TextMessageRecord
+    {
+        uint32_t id;
+        uint32_t from;
+        uint32_t to;
+        uint32_t timestamp;
+        uint16_t reserved;
+        uint8_t status;     // bits 0-6: TextMessage::Status enum (0-5), bit 7: read flag
+        uint8_t error_code; // meshtastic_Routing_Error raw value
+        uint8_t text_len;   // actual text length (0..MSG_TEXT_MAX)
+        char text[MSG_TEXT_MAX];
+    };
+    static_assert(sizeof(TextMessageRecord) == 256, "TextMessageRecord must be 256 bytes");
+
+    /**
+     * @brief Text message in-memory representation (used by UI and business logic)
      */
     struct TextMessage
     {
@@ -96,7 +107,6 @@ namespace Mesh
         bool read;          // Read status
         std::string text;   // Message content
 
-        // Message delivery status
         enum class Status
         {
             PENDING,
@@ -106,6 +116,7 @@ namespace Mesh
             DELIVERED,
             FAILED
         } status = Status::PENDING;
+        uint8_t error_code = 0; // meshtastic_Routing_Error raw value
     };
 
     /**
@@ -319,10 +330,14 @@ namespace Mesh
          * @brief Update the delivery status of a message by its packet ID.
          * Scans DM files to find the message and rewrites the file with updated status.
          * @param packet_id  The message ID (packet ID used during send)
+         * @param node_id    Destination node ID (for direct file lookup)
          * @param new_status The new status to set
+         * @param error_code Optional Routing_Error code
+         * @param channel   Channel index (used when node_id is broadcast 0xFFFFFFFF)
          * @return true if the message was found and updated
          */
-        bool updateMessageStatus(uint32_t packet_id, TextMessage::Status new_status);
+        bool updateMessageStatus(
+            uint32_t packet_id, uint32_t node_id, TextMessage::Status new_status, uint8_t error_code = 0, uint8_t channel = 0);
 
         /**
          * @brief Get total message count for a DM conversation without loading messages
@@ -482,9 +497,7 @@ namespace Mesh
         static void trResultToRecord(const TraceRouteResult& src, TraceRouteRecord& dst);
         static void trRecordToResult(const TraceRouteRecord& src, TraceRouteResult& dst);
 
-        // File I/O for messages
-        bool loadMessagesFromFile(const std::string& path, std::vector<TextMessage>& out) const;
-        bool saveMessagesToFile(const std::string& path, const std::vector<TextMessage>& messages);
+        // File I/O for messages (fixed-size records)
         bool appendMessageToFile(const std::string& path, const TextMessage& msg);
 
         // Index management
