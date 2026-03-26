@@ -3180,9 +3180,9 @@ namespace Mesh
             (uint32_t)floor((_my_region->freq_end - _my_region->freq_start) / (_my_region->spacing + (_bw / 1000.0f)));
 
         // Generate channel number from hash
-        const char* presetName = loraConfig.use_preset ? getPresetName(loraConfig.modem_preset) : "Custom";
+        // const char* presetName = loraConfig.use_preset ? getPresetName(loraConfig.modem_preset) : "Custom";
         uint32_t channel_num =
-            (loraConfig.channel_num ? loraConfig.channel_num - 1 : hashChannelName(presetName)) % numChannels;
+            (loraConfig.channel_num ? loraConfig.channel_num - 1 : hashChannelName(channelName)) % numChannels;
         // Calculate frequency (in MHz)
         float freq_mhz = _my_region->freq_start + (_bw / 2000.0f) + (channel_num * (_my_region->spacing + _bw / 1000.0f));
 
