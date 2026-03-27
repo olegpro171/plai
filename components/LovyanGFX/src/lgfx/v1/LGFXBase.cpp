@@ -2132,9 +2132,7 @@ namespace lgfx
         } while (uniCode < 0x20 && *(++string));
         if (uniCode < 0x20) break;
       }
-      if ((uniCode >= 0xFE00) && (uniCode < 0xFE10)) {
-          uniCode = 0;
-      }
+      if ((uniCode >= 0xFE00) && (uniCode < 0xFE10)) continue;
       bool use_emoji = false;
       if (uniCode > 0xFFFF) {
           use_emoji = true;
@@ -2192,9 +2190,7 @@ namespace lgfx
         } while (uniCode < 0x20 && *(++string));
         if (uniCode < 0x20) break;
       }
-      if ((uniCode >= 0xFE00) && (uniCode < 0xFE10)) {
-          uniCode = 0;
-      }
+      if ((uniCode >= 0xFE00) && (uniCode < 0xFE10)) continue;
       bool use_emoji = false;
       if (uniCode > 0xFFFF) {
           use_emoji = true;
@@ -2272,9 +2268,7 @@ namespace lgfx
           } while (uniCode < 0x20 && *++tmp);
           if (uniCode < 0x20) break;
         }
-        if ((uniCode >= 0xFE00) && (uniCode < 0xFE10)) {
-            uniCode = 0;
-        }
+        if ((uniCode >= 0xFE00) && (uniCode < 0xFE10)) continue;
         {
           bool use_emoji = false;
           if (uniCode > 0xFFFF) {
@@ -2345,9 +2339,7 @@ namespace lgfx
           } while (uniCode < 0x20 && *++string);
           if (uniCode < 0x20) break;
         }
-        if ((uniCode >= 0xFE00) && (uniCode < 0xFE10)) {
-            uniCode = 0;
-        }
+        if ((uniCode >= 0xFE00) && (uniCode < 0xFE10)) continue;
         {
           bool drawn = false;
           if (uniCode > 0xFFFF || (!font->updateFontMetric(&metrics, uniCode) && uniCode != 0)) {
@@ -2383,9 +2375,8 @@ namespace lgfx
         if (uniCode < 0x20)
             return 1;            
       }
-      if ((uniCode >= 0xFE00) && (uniCode < 0xFE10)) {
-          uniCode = 0;
-      }
+      if ((uniCode >= 0xFE00) && (uniCode < 0xFE10))
+          return 1;
       bool use_emoji = false;
       if (uniCode > 0xFFFF) {
           use_emoji = true;
