@@ -318,7 +318,7 @@ namespace UTILS
                     need_update = false;
                 }
                 hal->updateMesh();
-                delay(5);
+                vTaskDelay(1);
             }
         }
 
@@ -721,7 +721,7 @@ namespace UTILS
                 }
 
                 hal->updateMesh();
-                delay(5);
+                vTaskDelay(1);
             }
             hl_text_free(&hint_ctx);
             return result;
@@ -987,7 +987,7 @@ namespace UTILS
                     is_repeat = false;
                 }
                 hal->updateMesh();
-                delay(5);
+                vTaskDelay(1);
             }
             hl_text_free(&hint_ctx);
             return result;
@@ -1257,9 +1257,8 @@ namespace UTILS
                 {
                     is_repeat = false;
                 }
-
                 hal->updateMesh();
-                delay(5);
+                vTaskDelay(1);
             }
 
             UTILS::SCROLL_TEXT::scroll_text_free(&item_scroll_ctx);
