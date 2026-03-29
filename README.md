@@ -56,6 +56,7 @@ Full node management with up to 1000 nodes persisted on SD card.
 - Exchange node info _hotkey_ [N] — send node info request to selected node
 - Exchange position _hotkey_ [P] — send position request to selected node
 - Traceroute _hotkey_ [T] to open recent traceroute logs. [Fn] + [T] to start traceroute immediately
+- Quick messages _hotkey_ [Q] — open quick message templates editor
 
 #### Direct Messages
 
@@ -122,6 +123,38 @@ View direct neighbors (0-hop nodes) reported by each node via the `NEIGHBORINFO_
 - **Jump to node** — [ENTER] selects the highlighted neighbor and returns to node list with that node focused
 - **Read-only** — The neighbor list is populated automatically from received `NEIGHBORINFO_APP` packets; no manual editing
 - Each node's neighbor list stored in `neighbors/<node_id>.dat` on SD; cleaned up when the node is deleted
+
+#### Quick messages
+
+Manage reusable message templates for fast sending in DM and channel chats.
+
+In chat views press [Q] to open the quick message select dialog:
+
+<p align="center">
+  <img src="pics/quick_message_select.png" width="480" alt="Quick Message Select">
+</p>
+
+Select a message and press [ENTER] to edit it before sending:
+
+<p align="center">
+  <img src="pics/quick_message_edit.png" width="480" alt="Quick Message Edit">
+</p>
+
+Or press [ENTER] to send the selected message directly.
+
+In _Nodes_ view press [Q] to open the quick message editor, where you can add, edit, and delete messages:
+
+<p align="center">
+  <img src="pics/quick_message_view.png" width="480" alt="Quick Message View">
+</p>
+
+- **Open** — [Q] from node list
+- **Add** — [A] opens the text editor to create a new template
+- **Edit** — [ENTER] opens the text editor for the selected message
+- **Delete** — [DEL] removes the selected message (with confirmation)
+- **Navigation** — Arrow keys, [PgUp]/[PgDown] for page scroll, [Fn]+[↑] Home / [Fn]+[↓] End
+- Long messages scroll in place when selected
+- Templates stored in `templates.txt` on SD; created with defaults on first use
 
 ### Channels
 
