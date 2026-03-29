@@ -100,7 +100,7 @@ extern "C" void app_main(void)
 
         // Update mesh service (process BLE/radio events)
         hal.updateMesh();
-        vTaskDelay(1);
+        delay(1);
         if (hal.isDisplaySleeping())
         {
             hal.keyboard()->updateKeyList();

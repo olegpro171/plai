@@ -318,7 +318,7 @@ namespace UTILS
                     need_update = false;
                 }
                 hal->updateMesh();
-                vTaskDelay(1);
+                delay(5);
             }
         }
 
@@ -721,7 +721,7 @@ namespace UTILS
                 }
 
                 hal->updateMesh();
-                vTaskDelay(1);
+                delay(5);
             }
             hl_text_free(&hint_ctx);
             return result;
@@ -777,9 +777,8 @@ namespace UTILS
                 // Advance scroll_offset until cursor fits within visible area
                 while (scroll_offset < cursor_pos)
                 {
-                    std::string to_cursor = is_password
-                                                ? std::string(cursor_pos - scroll_offset, '*')
-                                                : utf8_substr(input, scroll_offset, cursor_pos - scroll_offset);
+                    std::string to_cursor = is_password ? std::string(cursor_pos - scroll_offset, '*')
+                                                        : utf8_substr(input, scroll_offset, cursor_pos - scroll_offset);
                     if (hal->canvas()->textWidth(to_cursor.c_str()) <= text_area_w)
                         break;
                     scroll_offset++;
@@ -797,17 +796,16 @@ namespace UTILS
                 }
 
                 // Draw visible text
-                std::string display_text = is_password ? std::string(visible_count, '*')
-                                                       : utf8_substr(input, scroll_offset, visible_count);
+                std::string display_text =
+                    is_password ? std::string(visible_count, '*') : utf8_substr(input, scroll_offset, visible_count);
                 hal->canvas()->setTextColor(TFT_WHITE, THEME_COLOR_BG);
                 hal->canvas()->drawString(display_text.c_str(), box_x + 5, box_y + 5);
 
                 // Draw cursor at measured pixel position
                 if ((millis() / 500) % 2 == 0)
                 {
-                    std::string before_cursor = is_password
-                                                    ? std::string(cursor_pos - scroll_offset, '*')
-                                                    : utf8_substr(input, scroll_offset, cursor_pos - scroll_offset);
+                    std::string before_cursor = is_password ? std::string(cursor_pos - scroll_offset, '*')
+                                                            : utf8_substr(input, scroll_offset, cursor_pos - scroll_offset);
                     int cursor_x = box_x + 5 + hal->canvas()->textWidth(before_cursor.c_str());
                     hal->canvas()->drawFastVLine(cursor_x, box_y + 3, box_h - 6, TFT_WHITE);
                 }
@@ -1000,7 +998,7 @@ namespace UTILS
                     is_repeat = false;
                 }
                 hal->updateMesh();
-                vTaskDelay(1);
+                delay(5);
             }
             hl_text_free(&hint_ctx);
             return result;
@@ -1271,7 +1269,7 @@ namespace UTILS
                     is_repeat = false;
                 }
                 hal->updateMesh();
-                vTaskDelay(1);
+                delay(5);
             }
 
             UTILS::SCROLL_TEXT::scroll_text_free(&item_scroll_ctx);

@@ -9,10 +9,7 @@
  *
  */
 #include "hal.h"
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-
-#define delay(ms) vTaskDelay(pdMS_TO_TICKS(ms))
+#include "common_define.h"
 
 #define RGB_LED_GPIO 21
 

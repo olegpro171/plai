@@ -17,9 +17,8 @@
 #include "driver/sdspi_host.h"
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "sdcard.h"
+#include "common_define.h"
 
 #define PIN_NUM_MISO 39
 #define PIN_NUM_MOSI 14
@@ -83,7 +82,7 @@ bool SDCard::mount(bool format_if_mount_failed)
         if (attempt > 0)
         {
             ESP_LOGW(TAG, "Retrying SD card mount (attempt %d/%d)...", attempt + 1, MAX_MOUNT_RETRIES);
-            vTaskDelay(pdMS_TO_TICKS(RETRY_DELAY_MS));
+            delay(RETRY_DELAY_MS);
         }
 
         ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &card);

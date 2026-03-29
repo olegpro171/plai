@@ -534,7 +534,7 @@ namespace Mesh
 
             _rx_callback(qp.packet, qp.packet.rx_rssi, qp.packet.rx_snr);
 
-            vTaskDelay(1);
+            delay(1);
         }
     }
 

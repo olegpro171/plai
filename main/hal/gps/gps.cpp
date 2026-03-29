@@ -113,7 +113,7 @@ namespace HAL
         if (_task_handle)
         {
             // Wait for task to exit
-            vTaskDelay(pdMS_TO_TICKS(GPS_READ_TIMEOUT_MS * 2));
+            delay(GPS_READ_TIMEOUT_MS * 2);
             _task_handle = nullptr;
         }
 

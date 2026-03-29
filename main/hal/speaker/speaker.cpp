@@ -4,6 +4,7 @@
  */
 #include "speaker.h"
 #include "hal.h"
+#include "common_define.h"
 #include <cstring>
 #include <algorithm>
 #include <driver/i2c_master.h>
@@ -105,7 +106,7 @@ namespace HAL
         // Wait for task to finish
         if (_task_handle)
         {
-            vTaskDelay(pdMS_TO_TICKS(100));
+            delay(100);
             vTaskDelete(_task_handle);
             _task_handle = nullptr;
         }

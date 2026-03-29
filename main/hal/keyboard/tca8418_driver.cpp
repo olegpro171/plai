@@ -8,6 +8,7 @@
  */
 #include "tca8418_driver.h"
 #include "esp_log.h"
+#include "common_define.h"
 #include <string.h>
 
 #define TAG "TCA8418"
@@ -64,7 +65,7 @@ namespace KEYBOARD
             ret = i2c_master_transmit(_dev_handle, write_buf, 2, TCA8418_TIMEOUT_MS);
             if (ret == ESP_OK)
                 break;
-            vTaskDelay(10 / portTICK_PERIOD_MS);
+            delay(10);
             retries--;
         } while (retries > 0);
         if (ret == ESP_OK)
@@ -104,7 +105,7 @@ namespace KEYBOARD
             ret = i2c_master_transmit_receive(_dev_handle, &reg, 1, value, 1, TCA8418_TIMEOUT_MS);
             if (ret == ESP_OK)
                 break;
-            vTaskDelay(10 / portTICK_PERIOD_MS);
+            delay(10);
             retries--;
         } while (retries > 0);
         if (ret == ESP_OK)

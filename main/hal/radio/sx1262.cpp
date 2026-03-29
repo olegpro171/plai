@@ -604,9 +604,9 @@ namespace HAL
     {
         ESP_LOGI(TAG, "Resetting SX1262");
         gpio_set_level((gpio_num_t)_pins.rst, 0);
-        vTaskDelay(pdMS_TO_TICKS(10));
+        delay(10);
         gpio_set_level((gpio_num_t)_pins.rst, 1);
-        vTaskDelay(pdMS_TO_TICKS(20));
+        delay(20);
         waitBusy();
     }
 
@@ -620,7 +620,7 @@ namespace HAL
                 ESP_LOGW(TAG, "Busy timeout");
                 break;
             }
-            vTaskDelay(1);
+            delay(1);
         }
     }
 
