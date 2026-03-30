@@ -413,6 +413,10 @@ Plai/
 └── Kconfig.projbuild          # menuconfig HAL options
 ```
 
+## Support the Project
+
+If you wish to support the project, click the **Sponsor** button at the top of this page or visit [github.com/sponsors/d4rkmen](https://github.com/sponsors/d4rkmen).
+
 ## Credits
 
 - Fonts: [efont](https://openlab.ring.gr.jp/efont/) Unicode bitmap fonts from the Linux distribution
