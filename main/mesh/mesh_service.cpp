@@ -776,6 +776,7 @@ namespace Mesh
         data_msg.payload.size = text_len;
         memcpy(data_msg.payload.bytes, text, text_len);
         data_msg.want_response = false;
+        applyOkToMqtt(data_msg);
 
         // Protobuf-encode the Data payload
         uint8_t data_buf[MAX_LORA_PAYLOAD] = {};
@@ -979,6 +980,7 @@ namespace Mesh
         data_msg.payload.size = len;
         memcpy(data_msg.payload.bytes, data, len);
         data_msg.want_response = false;
+        applyOkToMqtt(data_msg);
 
         uint8_t data_buf[MAX_LORA_PAYLOAD] = {};
         pb_ostream_t data_stream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
@@ -1890,6 +1892,12 @@ namespace Mesh
         if (packet.from != _config.node_id && Mesh::ignorelist_contains(packet.from))
         {
             ESP_LOGW(TAG, "Ignoring packet from 0x%08lX (in ignore list)", (unsigned long)packet.from);
+            return;
+        }
+
+        if (packet.via_mqtt && _config.lora_config.ignore_mqtt)
+        {
+            ESP_LOGW(TAG, "Ignoring MQTT packet from 0x%08lX (ignore_mqtt enabled)", (unsigned long)packet.from);
             return;
         }
 
@@ -2842,6 +2850,7 @@ namespace Mesh
             memcpy(data.payload.bytes, route_buf, data.payload.size);
             data.request_id = packet.id; // Mark as response to original request
             data.want_response = false;
+            applyOkToMqtt(data);
 
             uint8_t data_buf[MAX_LORA_PAYLOAD] = {};
             pb_ostream_t data_stream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
@@ -2977,6 +2986,7 @@ namespace Mesh
         data.payload.size = route_stream.bytes_written;
         memcpy(data.payload.bytes, route_buf, data.payload.size);
         data.want_response = true;
+        applyOkToMqtt(data);
 
         uint8_t data_buf[MAX_LORA_PAYLOAD] = {};
         pb_ostream_t data_stream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
@@ -3466,6 +3476,7 @@ namespace Mesh
         data.payload.size = user_stream.bytes_written;
         memcpy(data.payload.bytes, user_buf, data.payload.size);
         data.want_response = want_response;
+        applyOkToMqtt(data);
 
         uint8_t data_buf[MAX_LORA_PAYLOAD] = {};
         pb_ostream_t data_stream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
@@ -3537,6 +3548,7 @@ namespace Mesh
         data.payload.size = ni_stream.bytes_written;
         memcpy(data.payload.bytes, ni_buf, data.payload.size);
         data.want_response = want_response;
+        applyOkToMqtt(data);
 
         uint8_t data_buf[MAX_LORA_PAYLOAD] = {};
         pb_ostream_t data_stream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
@@ -3709,6 +3721,7 @@ namespace Mesh
         data.payload.size = pos_stream.bytes_written;
         memcpy(data.payload.bytes, pos_buf, data.payload.size);
         data.want_response = want_response;
+        applyOkToMqtt(data);
 
         uint8_t data_buf[MAX_LORA_PAYLOAD] = {};
         pb_ostream_t data_stream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
@@ -3958,6 +3971,7 @@ namespace Mesh
         data.payload.size = tel_stream.bytes_written;
         memcpy(data.payload.bytes, tel_buf, data.payload.size);
         data.want_response = false;
+        applyOkToMqtt(data);
 
         uint8_t data_buf[MAX_LORA_PAYLOAD] = {};
         pb_ostream_t data_stream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
@@ -4035,6 +4049,7 @@ namespace Mesh
         memcpy(data.payload.bytes, routing_buf, data.payload.size);
         data.request_id = packet_id; // Reference the original packet ID
         data.want_response = false;
+        applyOkToMqtt(data);
 
         uint8_t data_buf[MAX_LORA_PAYLOAD] = {};
         pb_ostream_t data_stream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
@@ -4175,6 +4190,8 @@ namespace Mesh
         config.lora_config.channel_num = _settings->getNumber("lora", "freq_slot");
         int32_t freq_ovr_khz = _settings->getNumber("lora", "freq_ovr");
         config.lora_config.override_frequency = (freq_ovr_khz > 0) ? (float)freq_ovr_khz / 1000.0f : 0.0f;
+        config.lora_config.ignore_mqtt = !_settings->getBool("lora", "mqtt_rx");
+        config.lora_config.config_ok_to_mqtt = _settings->getBool("lora", "mqtt_tx");
 
         // Security keys (decode from base64, leave unchanged if missing/invalid)
         std::string priv_b64 = _settings->getString("security", "private_key");
@@ -4272,6 +4289,15 @@ namespace Mesh
         config.nodeinfo_broadcast_interval_ms = parseIntervalToMs(_settings->getString("nodeinfo", "bcast_int"));
         config.position_broadcast_interval_ms = parseIntervalToMs(_settings->getString("position", "bcast_int"));
         config.telemetry_broadcast_interval_ms = parseIntervalToMs(_settings->getString("devmetrics", "bcast_int"));
+    }
+
+    void MeshService::applyOkToMqtt(meshtastic_Data& data) const
+    {
+        if (_config.lora_config.config_ok_to_mqtt)
+        {
+            data.has_bitfield = true;
+            data.bitfield |= 1;
+        }
     }
 
     void MeshService::forceNodeInfoBroadcast()

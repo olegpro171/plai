@@ -425,6 +425,7 @@ namespace Mesh
         void initRegion();
         void applyModemConfig();
         uint32_t generateNodeId();
+        void applyOkToMqtt(meshtastic_Data& data) const;
 
         // NodeInfo broadcast and reply
         void broadcastNodeInfo();

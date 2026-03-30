@@ -18,6 +18,8 @@ freq_ovr,data,i32,0
 duty_ovr,data,u8,1
 rx_boost,data,u8,1
 tx_power,data,i32,22
+mqtt_rx,data,u8,1
+mqtt_tx,data,u8,1
 # security
 security,namespace,,
 public_key,data,string,""
