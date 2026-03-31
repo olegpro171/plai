@@ -14,12 +14,16 @@
 #include "esp_log.h"
 #include "common_define.h"
 #include "keyboard/keyboard.h"
+#include "lgfx/v1/misc/colortype.hpp"
 #include "lgfx/v1/misc/enum.hpp"
 #include "mbedtls/base64.h"
 #include "mesh/mesh_service.h"
 #include "meshtastic/channel.pb.h"
 #include "meshtastic/mesh.pb.h"
 #include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <stdio.h>
 #include <time.h>
 
 #include "apps/utils/text/text_utils.h"
@@ -35,7 +39,7 @@ static const char* HINT_LIST = "[Fn][\u2191][\u2193][\u2190][\u2192][1..8.F.I.T.
 static const char* HINT_LIST_FN = "[\u2191]HOME [\u2193]END [T][F][I][N][B]";
 static const char* HINT_DM = "[Fn] [^] [\u2191][\u2193][\u2190][\u2192] [I] [T] [ENTER][DEL] [ESC]";
 static const char* HINT_DM_FN = "[\u2191]HOME [\u2193]END";
-static const char* HINT_DETAIL = "[T]RACE [ENTER]DM [ESC]";
+static const char* HINT_DETAIL = "[T]RACE [M]AP [ENTER]DM [ESC]";
 static const char* HINT_TR_LOG = "[\u2191][\u2193][\u2190][\u2192] [ENTER] [T]RACE [ESC]";
 static const char* HINT_TR_DETAIL = "[\u2191][\u2193][\u2190][\u2192] [ESC]";
 static const char* HINT_FAV_LIST = "[Fn] [\u2191][\u2193][\u2190][\u2192] [DEL] [ESC] [ENTER]";
@@ -175,6 +179,11 @@ void AppNodes::onCreate()
     _data.qm_selected_index = 0;
     _data.qm_scroll_offset = 0;
 
+    // Map view state
+    _data.map_center_lat = 0;
+    _data.map_center_lon = 0;
+    _data.map_zoom = 10;
+
     // Initialize scrolling text context for node names (FONT_12)
     scroll_text_init_ex(&_data.name_scroll_ctx,
                         _data.hal->canvas(),
@@ -273,6 +282,16 @@ void AppNodes::onRunning()
             _data.hal->canvas_update();
         }
         _handle_node_detail_input();
+        break;
+
+    case ViewState::NODE_MAP:
+        updated |= _render_node_map();
+        updated |= _render_node_map_hint();
+        if (updated)
+        {
+            _data.hal->canvas_update();
+        }
+        _handle_node_map_input();
         break;
 
     case ViewState::DIRECT_MESSAGE:
@@ -2163,6 +2182,29 @@ void AppNodes::_handle_node_detail_input()
             _data.tr_detail_scroll = 0;
             _start_traceroute();
             _data.view_state = ViewState::TRACEROUTE_LOG;
+            _data.update_list = true;
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_M))
+        {
+            _data.hal->playNextSound();
+            _data.hal->keyboard()->waitForRelease(KEY_NUM_M);
+
+            // Center map on selected node's position, or default to 0,0
+            _data.map_center_lat = 0;
+            _data.map_center_lon = 0;
+            _data.map_zoom = 10;
+
+            if (_data.selected_node_valid && _data.selected_node.info.has_position)
+            {
+                const auto& pos = _data.selected_node.info.position;
+                if (pos.latitude_i != 0 || pos.longitude_i != 0)
+                {
+                    _data.map_center_lat = pos.latitude_i * 1e-7f;
+                    _data.map_center_lon = pos.longitude_i * 1e-7f;
+                }
+            }
+
+            _data.view_state = ViewState::NODE_MAP;
             _data.update_list = true;
         }
     }
@@ -4068,6 +4110,368 @@ void AppNodes::_handle_quick_messages_input()
 }
 
 // ========== End Quick Messages ==========
+
+// ========== Node Map View ==========
+
+static const char* HINT_MAP = "[Fn] [\u2190\u2192\u2191\u2193]PAN [C]ENTER [ESC]";
+static const char* HINT_MAP_FN = "[\u2191\u2193]ZOOM [C]OUR NODE";
+
+static constexpr uint32_t MAP_COLOR_BG = 0xD4DADC; // light grey (fallback for missing tiles)
+
+// ===== OSM raster tile map renderer =====
+
+void AppNodes::_map_latlon_to_pixel(double lat, double lon, int zoom, double& px, double& py)
+{
+    double n = (double)(1 << zoom);
+    px = (lon + 180.0) / 360.0 * n * MAP_TILE_PX;
+    double lat_rad = lat * M_PI / 180.0;
+    py = (1.0 - log(tan(lat_rad) + 1.0 / cos(lat_rad)) / M_PI) / 2.0 * n * MAP_TILE_PX;
+}
+
+void AppNodes::_map_pixel_to_latlon(double px, double py, int zoom, double& lat, double& lon)
+{
+    double n = (double)(1 << zoom);
+    lon = px / (n * MAP_TILE_PX) * 360.0 - 180.0;
+    lat = atan(sinh(M_PI * (1.0 - 2.0 * py / (n * MAP_TILE_PX)))) * 180.0 / M_PI;
+}
+
+bool AppNodes::_map_draw_tile(int tx, int ty, int zoom, int screen_x, int screen_y, int map_w, int map_h, int map_y)
+{
+    int n = 1 << zoom;
+    if (tx < 0 || tx >= n || ty < 0 || ty >= n)
+        return false;
+
+    char path[80];
+    snprintf(path, sizeof(path), "%s/%d/%d/%d.jpg", MAP_TILE_DIR, zoom, tx, ty);
+
+    auto* canvas = _data.hal->canvas();
+
+    int src_x = 0, src_y = 0;
+    int dst_x = screen_x, dst_y = screen_y;
+    int draw_w = MAP_TILE_PX, draw_h = MAP_TILE_PX;
+
+    if (dst_x < 0)
+    {
+        src_x = -dst_x;
+        draw_w += dst_x;
+        dst_x = 0;
+    }
+    if (dst_y < map_y)
+    {
+        src_y = map_y - dst_y;
+        draw_h -= (map_y - dst_y);
+        dst_y = map_y;
+    }
+    if (dst_x + draw_w > map_w)
+        draw_w = map_w - dst_x;
+    if (dst_y + draw_h > map_y + map_h)
+        draw_h = map_y + map_h - dst_y;
+    if (draw_w <= 0 || draw_h <= 0)
+        return false;
+
+    return canvas->drawJpgFile(path, dst_x, dst_y, draw_w, draw_h, src_x, src_y);
+}
+
+bool AppNodes::_render_node_map()
+{
+    if (!_data.update_list)
+        return false;
+    _data.update_list = false;
+
+    auto* canvas = _data.hal->canvas();
+    canvas->fillScreen(MAP_COLOR_BG);
+    canvas->setFont(FONT_12);
+
+    const int map_y = 0;
+    const int map_w = canvas->width();
+    const int map_h = canvas->height() - 9;
+
+    int z = _data.map_zoom;
+    if (z < MAP_MIN_ZOOM)
+        z = MAP_MIN_ZOOM;
+    if (z > MAP_MAX_ZOOM)
+        z = MAP_MAX_ZOOM;
+
+    // Convert center lat/lon to pixel coordinates in the global Mercator space
+    double center_px, center_py;
+    _map_latlon_to_pixel(_data.map_center_lat, _data.map_center_lon, z, center_px, center_py);
+
+    // Viewport in global pixel coords
+    double vp_left = center_px - map_w / 2.0;
+    double vp_top = center_py - map_h / 2.0;
+
+    // Tile range
+    int tx_min = (int)floor(vp_left / MAP_TILE_PX);
+    int tx_max = (int)floor((vp_left + map_w - 1) / MAP_TILE_PX);
+    int ty_min = (int)floor(vp_top / MAP_TILE_PX);
+    int ty_max = (int)floor((vp_top + map_h - 1) / MAP_TILE_PX);
+
+    // Draw tile grid
+    for (int ty = ty_min; ty <= ty_max; ty++)
+    {
+        for (int tx = tx_min; tx <= tx_max; tx++)
+        {
+            int scr_x = (int)(tx * MAP_TILE_PX - vp_left);
+            int scr_y = map_y + (int)(ty * MAP_TILE_PX - vp_top);
+            _map_draw_tile(tx, ty, z, scr_x, scr_y, map_w, map_h, map_y);
+        }
+    }
+
+    // --- Render all nodes with positions as markers ---
+    auto* nodedb = _data.hal->nodedb();
+    if (nodedb)
+    {
+        size_t total = nodedb->getNodeCount();
+        uint32_t our_id = _data.hal->mesh() ? _data.hal->mesh()->getNodeId() : 0;
+
+        const size_t batch_size = 20;
+        for (size_t offset = 0; offset < total; offset += batch_size)
+        {
+            std::vector<Mesh::NodeInfo> batch;
+            size_t loaded = nodedb->getNodesInRange(offset, batch_size, batch, _data.sort_order);
+
+            for (size_t i = 0; i < loaded; i++)
+            {
+                const auto& node = batch[i];
+                if (!node.info.has_position || (!node.info.position.has_latitude_i && !node.info.position.has_longitude_i))
+                    continue;
+                if (node.info.position.latitude_i == 0 && node.info.position.longitude_i == 0)
+                    continue;
+
+                double nlat = node.info.position.latitude_i * 1e-7;
+                double nlon = node.info.position.longitude_i * 1e-7;
+
+                double npx, npy;
+                _map_latlon_to_pixel(nlat, nlon, z, npx, npy);
+                int nx = (int)(npx - vp_left);
+                int ny = map_y + (int)(npy - vp_top);
+
+                if (nx < -10 || nx > map_w + 10 || ny < map_y - 10 || ny > map_y + map_h + 10)
+                    continue;
+
+                bool is_selected = (node.info.num == _data.selected_node_id);
+                bool is_ours = (node.info.num == our_id);
+
+                uint32_t marker_color;
+                int marker_r;
+
+                if (is_selected)
+                {
+                    marker_color = lgfx::convert_to_rgb888(TFT_ORANGE);
+                    marker_r = 4;
+                }
+                else if (is_ours)
+                {
+                    marker_color = lgfx::convert_to_rgb888(TFT_CYAN);
+                    marker_r = 3;
+                }
+                else
+                {
+                    marker_color = _get_node_color(node.info.num);
+                    marker_r = 2;
+                }
+
+                canvas->fillCircle(nx, ny, marker_r + 1, TFT_BLACK);
+                canvas->fillCircle(nx, ny, marker_r, marker_color);
+
+                if (is_selected)
+                {
+                    canvas->drawLine(nx - 7, ny, nx - 3, ny, TFT_RED);
+                    canvas->drawLine(nx + 3, ny, nx + 7, ny, TFT_RED);
+                    canvas->drawLine(nx, ny - 7, nx, ny - 3, TFT_RED);
+                    canvas->drawLine(nx, ny + 3, nx, ny + 7, TFT_RED);
+                }
+
+                if (z >= 8 || is_selected)
+                {
+                    const char* label = node.info.user.short_name;
+                    if (label[0] != '\0')
+                    {
+                        int lw = strlen(label) * 6;
+                        int lx = nx + marker_r + 2;
+                        if (lx + lw > map_w)
+                            lx = nx - lw - marker_r - 2;
+                        int ly = ny - 5;
+                        if (ly < map_y)
+                            ly = ny + marker_r + 1;
+                        uint32_t text_color = is_selected ? lgfx::convert_to_rgb888(TFT_ORANGE) : _get_node_text_color(node.info.num);
+                        canvas->setTextColor(text_color);
+                        canvas->drawString(label, lx, ly);
+                    }
+                }
+            }
+        }
+    }
+
+    // --- Info overlay ---
+    canvas->setFont(FONT_8);
+    char z_buf[16];
+    snprintf(z_buf, sizeof(z_buf), "z%d", z);
+    canvas->setTextColor(TFT_DARKGREY);
+    canvas->drawString(z_buf, 2, map_y + map_h - 10);
+
+    char pos_buf[24];
+    snprintf(pos_buf, sizeof(pos_buf), "%.4f,%.4f", _data.map_center_lat, _data.map_center_lon);
+    int pw = strlen(pos_buf) * 6;
+    canvas->setTextColor(TFT_DARKGREY);
+    canvas->drawString(pos_buf, map_w - pw - 2, map_y + map_h - 10);
+
+    canvas->setFont(FONT_12);
+    return true;
+}
+
+bool AppNodes::_render_node_map_hint()
+{
+    static bool last_fn = false;
+    auto c = _data.hal->canvas();
+    auto keys_state = _data.hal->keyboard()->keysState();
+    if (last_fn != keys_state.fn)
+    {
+        last_fn = keys_state.fn;
+        c->fillRect(0, c->height() - 9, c->width(), 10, THEME_COLOR_BG);
+    }
+    return hl_text_render(&_data.hint_hl_ctx,
+                          last_fn ? HINT_MAP_FN : HINT_MAP,
+                          0,
+                          _data.hal->canvas()->height() - 9,
+                          TFT_DARKGREY,
+                          TFT_WHITE,
+                          THEME_COLOR_BG);
+}
+
+void AppNodes::_handle_node_map_input()
+{
+    _data.hal->keyboard()->updateKeyList();
+    _data.hal->keyboard()->updateKeysState();
+
+    if (_data.hal->keyboard()->isPressed())
+    {
+        uint32_t now = millis();
+        auto keys_state = _data.hal->keyboard()->keysState();
+
+        // Pan step: move by 25% of viewport in Mercator pixel space
+        double center_px, center_py;
+        _map_latlon_to_pixel(_data.map_center_lat, _data.map_center_lon, _data.map_zoom, center_px, center_py);
+        int map_w = _data.hal->canvas()->width();
+        int map_h = _data.hal->canvas()->height() - 9;
+        double pan_x = map_w * 0.25;
+        double pan_y = map_h * 0.25;
+
+        auto set_center_from_pixel = [&](double px, double py)
+        {
+            double lat, lon;
+            _map_pixel_to_latlon(px, py, _data.map_zoom, lat, lon);
+            _data.map_center_lat = (float)lat;
+            _data.map_center_lon = (float)lon;
+        };
+
+        if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_ESC))
+        {
+            _data.hal->playNextSound();
+            _data.hal->keyboard()->waitForRelease(KEY_NUM_ESC);
+            _data.view_state = ViewState::NODE_DETAIL;
+            _data.update_list = true;
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_UP))
+        {
+            if (key_repeat_check(is_repeat, next_fire_ts, now))
+            {
+                _data.hal->playNextSound();
+                if (!keys_state.fn)
+                {
+                    set_center_from_pixel(center_px, center_py - pan_y);
+                    if (_data.map_center_lat > 85.0f)
+                        _data.map_center_lat = 85.0f;
+                }
+                else
+                {
+                    if (_data.map_zoom < MAP_MAX_ZOOM)
+                        _data.map_zoom++;
+                }
+                _data.update_list = true;
+            }
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_DOWN))
+        {
+            if (key_repeat_check(is_repeat, next_fire_ts, now))
+            {
+                _data.hal->playNextSound();
+                if (!keys_state.fn)
+                {
+                    set_center_from_pixel(center_px, center_py + pan_y);
+                    if (_data.map_center_lat < -85.0f)
+                        _data.map_center_lat = -85.0f;
+                }
+                else
+                {
+                    if (_data.map_zoom > MAP_MIN_ZOOM)
+                        _data.map_zoom--;
+                }
+                _data.update_list = true;
+            }
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_RIGHT))
+        {
+            if (key_repeat_check(is_repeat, next_fire_ts, now))
+            {
+                _data.hal->playNextSound();
+                set_center_from_pixel(center_px + pan_x, center_py);
+                if (_data.map_center_lon > 180.0f)
+                    _data.map_center_lon -= 360.0f;
+                _data.update_list = true;
+            }
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_LEFT))
+        {
+            if (key_repeat_check(is_repeat, next_fire_ts, now))
+            {
+                _data.hal->playNextSound();
+                set_center_from_pixel(center_px - pan_x, center_py);
+                if (_data.map_center_lon < -180.0f)
+                    _data.map_center_lon += 360.0f;
+                _data.update_list = true;
+            }
+        }
+        else if (_data.hal->keyboard()->isKeyPressing(KEY_NUM_C))
+        {
+            _data.hal->playNextSound();
+            _data.hal->keyboard()->waitForRelease(KEY_NUM_C);
+
+            bool centered = false;
+            if (keys_state.fn && _data.hal->mesh())
+            {
+                uint32_t our_id = _data.hal->mesh()->getNodeId();
+                Mesh::NodeInfo our_node;
+                if (_data.hal->nodedb() && _data.hal->nodedb()->getNode(our_id, our_node))
+                {
+                    if (our_node.info.has_position &&
+                        (our_node.info.position.latitude_i != 0 || our_node.info.position.longitude_i != 0))
+                    {
+                        _data.map_center_lat = our_node.info.position.latitude_i * 1e-7f;
+                        _data.map_center_lon = our_node.info.position.longitude_i * 1e-7f;
+                        centered = true;
+                    }
+                }
+            }
+            if (!centered && _data.selected_node_valid)
+            {
+                const auto& pos = _data.selected_node.info.position;
+                if (_data.selected_node.info.has_position && (pos.latitude_i != 0 || pos.longitude_i != 0))
+                {
+                    _data.map_center_lat = pos.latitude_i * 1e-7f;
+                    _data.map_center_lon = pos.longitude_i * 1e-7f;
+                }
+            }
+            _data.update_list = true;
+        }
+    }
+    else
+    {
+        is_repeat = false;
+    }
+}
+
+// ========== End Node Map ==========
 
 void AppNodes::_send_message(const std::string& text)
 {

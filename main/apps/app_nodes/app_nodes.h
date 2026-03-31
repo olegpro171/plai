@@ -43,6 +43,7 @@ namespace MOONCAKE::APPS
         {
             NODE_LIST,
             NODE_DETAIL,
+            NODE_MAP,
             DIRECT_MESSAGE,
             TRACEROUTE_LOG,
             TRACEROUTE_DETAIL,
@@ -51,6 +52,12 @@ namespace MOONCAKE::APPS
             NEIGHBOR_LIST,
             QUICK_MESSAGES
         };
+
+        // OSM raster tile map constants
+        static constexpr int MAP_TILE_PX = 256;
+        static constexpr int MAP_MIN_ZOOM = 2;
+        static constexpr int MAP_MAX_ZOOM = 15;
+        static constexpr const char* MAP_TILE_DIR = "/sdcard/map/tiles";
 
     private:
         struct
@@ -106,6 +113,11 @@ namespace MOONCAKE::APPS
             int qm_selected_index;
             int qm_scroll_offset;
 
+            // Map view state
+            float map_center_lat;
+            float map_center_lon;
+            int map_zoom;
+
             // Sorting
             Mesh::SortOrder sort_order;
 
@@ -142,6 +154,8 @@ namespace MOONCAKE::APPS
         bool _render_quick_messages();
         bool _render_scrolling_qm(bool force = false);
         bool _render_quick_messages_hint();
+        bool _render_node_map();
+        bool _render_node_map_hint();
 
         // Input handling
         void _handle_node_list_input();
@@ -153,12 +167,19 @@ namespace MOONCAKE::APPS
         void _handle_ignore_list_input();
         void _handle_neighbor_list_input();
         void _handle_quick_messages_input();
+        void _handle_node_map_input();
 
         // Traceroute helpers
         void _start_traceroute();
 
         // Sorting
         void _apply_sort_order(Mesh::SortOrder new_order);
+
+        // OSM raster tile map helpers
+        static void _map_latlon_to_pixel(double lat, double lon, int zoom, double& px, double& py);
+        static void _map_pixel_to_latlon(double px, double py, int zoom, double& lat, double& lon);
+        bool _map_draw_tile(int tx, int ty, int zoom, int screen_x, int screen_y,
+                            int map_w, int map_h, int map_y);
 
         // Helpers
         bool _selected_node_valid();
