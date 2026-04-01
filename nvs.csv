@@ -8,6 +8,7 @@ boot_sound,data,u8,1
 show_bat_volt,data,u8,1
 show_time,data,u8,1
 timezone,data,string,"GMT+2"
+map_style,data,string,"osm"
 # lora
 lora,namespace,,
 region,data,string,"UA_433"

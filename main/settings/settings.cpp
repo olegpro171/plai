@@ -76,6 +76,14 @@ namespace SETTINGS
              "",
              "Timezone offset from GMT",
              [](SettingItem_t& item) { applyTimezone(item.value); }},
+            {"map_style",
+             "Map style",
+             TYPE_STRING,
+             "osm",
+             "osm",
+             "osm;dark;voyager;topo",
+             "",
+             "Offline map style (map folder on SD card)"},
         };
 
         auto mesh_apply_cb = [this](SettingItem_t& item) { applyMeshConfig(item); };
@@ -147,7 +155,15 @@ namespace SETTINGS
              mesh_apply_cb},
             {"rx_boost", "RX boost", TYPE_BOOL, "false", "false", "", "", "Enable SX126x RX boosted gain", mesh_apply_cb},
             {"tx_power", "TX power", TYPE_NUMBER, "22", "22", "-9", "22", "Transmit power in dBm (-9 to 22)", mesh_apply_cb},
-            {"mqtt_rx", "MQTT RX", TYPE_BOOL, "true", "true", "", "", "Accept packets passed via MQTT anywhere on the path towards this node", mesh_apply_cb},
+            {"mqtt_rx",
+             "MQTT RX",
+             TYPE_BOOL,
+             "true",
+             "true",
+             "",
+             "",
+             "Accept packets passed via MQTT anywhere on the path towards this node",
+             mesh_apply_cb},
             {"mqtt_tx", "MQTT TX", TYPE_BOOL, "true", "true", "", "", "Set ok_to_mqtt bit on outgoing packets", mesh_apply_cb},
         };
 
