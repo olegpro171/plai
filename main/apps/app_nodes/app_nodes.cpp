@@ -53,6 +53,17 @@ static const char* HINT_QM_LIST_FN = "[\u2191]HOME [\u2193]END";
 static const char* HINT_MAP = "[Fn] [\u2190][\u2192][\u2191][\u2193] [C] [ENTER] [ESC]";
 static const char* HINT_MAP_FN = "[\u2191][\u2193]ZOOM [C]OUR NODE";
 
+static bool last_fn = false;
+
+static void hint_bar_clear_on_fn_change(bool fn, LGFX_Sprite* c)
+{
+    if (last_fn != fn)
+    {
+        last_fn = fn;
+        c->fillRect(0, c->height() - 9, c->width(), 10, THEME_COLOR_BG);
+    }
+}
+
 // Sort order selection dialog
 static const char* const sort_labels[] = {
     "None", "Short name", "Long name", "Role", "Signal", "Hops away", "Last seen", "Favorites first"};
@@ -423,15 +434,9 @@ void AppNodes::onDestroy()
 
 bool AppNodes::_render_list_hint()
 {
-    static bool last_fn = false;
     auto c = _data.hal->canvas();
     auto keys_state = _data.hal->keyboard()->keysState();
-    // clear before put text
-    if (last_fn != keys_state.fn)
-    {
-        last_fn = keys_state.fn;
-        c->fillRect(0, c->height() - 9, c->width(), 10, THEME_COLOR_BG);
-    }
+    hint_bar_clear_on_fn_change(keys_state.fn, c);
     return hl_text_render(&_data.hint_hl_ctx,
                           last_fn ? HINT_LIST_FN : HINT_LIST,
                           0,
@@ -443,15 +448,9 @@ bool AppNodes::_render_list_hint()
 
 bool AppNodes::_render_dm_hint()
 {
-    static bool last_fn = false;
     auto c = _data.hal->canvas();
     auto keys_state = _data.hal->keyboard()->keysState();
-    // clear before put text
-    if (last_fn != keys_state.fn)
-    {
-        last_fn = keys_state.fn;
-        c->fillRect(0, c->height() - 9, c->width(), 10, THEME_COLOR_BG);
-    }
+    hint_bar_clear_on_fn_change(keys_state.fn, c);
     return hl_text_render(&_data.hint_hl_ctx,
                           last_fn ? HINT_DM_FN : HINT_DM,
                           0,
@@ -3093,14 +3092,9 @@ bool AppNodes::_render_favorite_list()
 
 bool AppNodes::_render_favorite_hint()
 {
-    static bool last_fn = false;
     auto c = _data.hal->canvas();
     auto keys_state = _data.hal->keyboard()->keysState();
-    if (last_fn != keys_state.fn)
-    {
-        last_fn = keys_state.fn;
-        c->fillRect(0, c->height() - 9, c->width(), 10, THEME_COLOR_BG);
-    }
+    hint_bar_clear_on_fn_change(keys_state.fn, c);
     return hl_text_render(&_data.hint_hl_ctx,
                           last_fn ? HINT_FAV_LIST_FN : HINT_FAV_LIST,
                           0,
@@ -3414,14 +3408,9 @@ bool AppNodes::_render_ignore_list()
 
 bool AppNodes::_render_ignore_hint()
 {
-    static bool last_fn = false;
     auto c = _data.hal->canvas();
     auto keys_state = _data.hal->keyboard()->keysState();
-    if (last_fn != keys_state.fn)
-    {
-        last_fn = keys_state.fn;
-        c->fillRect(0, c->height() - 9, c->width(), 10, THEME_COLOR_BG);
-    }
+    hint_bar_clear_on_fn_change(keys_state.fn, c);
     return hl_text_render(&_data.hint_hl_ctx,
                           last_fn ? HINT_IGN_LIST_FN : HINT_IGN_LIST,
                           0,
@@ -3735,14 +3724,9 @@ bool AppNodes::_render_neighbor_list()
 
 bool AppNodes::_render_neighbor_hint()
 {
-    static bool last_fn = false;
     auto c = _data.hal->canvas();
     auto keys_state = _data.hal->keyboard()->keysState();
-    if (last_fn != keys_state.fn)
-    {
-        last_fn = keys_state.fn;
-        c->fillRect(0, c->height() - 9, c->width(), 10, THEME_COLOR_BG);
-    }
+    hint_bar_clear_on_fn_change(keys_state.fn, c);
     return hl_text_render(&_data.hint_hl_ctx,
                           last_fn ? HINT_NBR_LIST_FN : HINT_NBR_LIST,
                           0,
@@ -3972,14 +3956,9 @@ bool AppNodes::_render_scrolling_qm(bool force)
 
 bool AppNodes::_render_quick_messages_hint()
 {
-    static bool last_fn = false;
     auto c = _data.hal->canvas();
     auto keys_state = _data.hal->keyboard()->keysState();
-    if (last_fn != keys_state.fn)
-    {
-        last_fn = keys_state.fn;
-        c->fillRect(0, c->height() - 9, c->width(), 10, THEME_COLOR_BG);
-    }
+    hint_bar_clear_on_fn_change(keys_state.fn, c);
     return hl_text_render(&_data.hint_hl_ctx,
                           last_fn ? HINT_QM_LIST_FN : HINT_QM_LIST,
                           0,
@@ -4244,6 +4223,8 @@ bool AppNodes::_render_node_map()
             _map_draw_tile(tx, ty, z, scr_x, scr_y, map_w, map_h, map_y);
         }
     }
+    // clear bottom for hint
+    hint_bar_clear_on_fn_change(!last_fn, canvas);
 
     // --- Render nodes directly from in-memory index (zero I/O) ---
     auto* nodedb = _data.hal->nodedb();
@@ -4274,19 +4255,17 @@ bool AppNodes::_render_node_map()
             uint32_t marker_color;
             int marker_r;
 
+            marker_color = _get_node_color(entry.node_id);
             if (is_selected)
             {
-                marker_color = lgfx::convert_to_rgb888(TFT_ORANGE);
                 marker_r = 4;
             }
             else if (is_ours)
             {
-                marker_color = lgfx::convert_to_rgb888(TFT_CYAN);
                 marker_r = 3;
             }
             else
             {
-                marker_color = _get_node_color(entry.node_id);
                 marker_r = 2;
             }
 
@@ -4311,9 +4290,7 @@ bool AppNodes::_render_node_map()
                 int ly = ny - 5;
                 if (ly < map_y)
                     ly = ny + marker_r + 1;
-                // uint32_t text_color = is_selected ? lgfx::convert_to_rgb888(TFT_ORANGE) :
-                // _get_node_text_color(entry.node_id);
-                canvas->setTextColor(TFT_BLACK);
+                canvas->setTextColor(is_selected ? TFT_ORANGE : TFT_BLACK);
                 canvas->drawString(label.c_str(), lx, ly);
             }
         }
@@ -4322,14 +4299,13 @@ bool AppNodes::_render_node_map()
     // --- Info overlay ---
     canvas->setFont(FONT_8);
     char z_buf[16];
-    snprintf(z_buf, sizeof(z_buf), "z%d", z);
+    snprintf(z_buf, sizeof(z_buf), "Zoom: %d", z);
     canvas->setTextColor(TFT_BLACK);
     canvas->drawString(z_buf, 2, map_y + map_h - 10);
 
     char pos_buf[24];
-    snprintf(pos_buf, sizeof(pos_buf), "%.4f,%.4f", _data.map_center_lat, _data.map_center_lon);
+    snprintf(pos_buf, sizeof(pos_buf), "%.4f, %.4f", _data.map_center_lat, _data.map_center_lon);
     int pw = strlen(pos_buf) * 6;
-    // canvas->setTextColor(TFT_BLACK);
     canvas->drawString(pos_buf, map_w - pw - 2, map_y + map_h - 10);
 
     canvas->setFont(FONT_12);
@@ -4338,14 +4314,9 @@ bool AppNodes::_render_node_map()
 
 bool AppNodes::_render_node_map_hint()
 {
-    static bool last_fn = false;
     auto c = _data.hal->canvas();
     auto keys_state = _data.hal->keyboard()->keysState();
-    if (last_fn != keys_state.fn)
-    {
-        last_fn = keys_state.fn;
-        c->fillRect(0, c->height() - 9, c->width(), 10, THEME_COLOR_BG);
-    }
+    hint_bar_clear_on_fn_change(keys_state.fn, c);
     return hl_text_render(&_data.hint_hl_ctx,
                           last_fn ? HINT_MAP_FN : HINT_MAP,
                           0,
