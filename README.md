@@ -262,18 +262,18 @@ python map/download_osm_tiles.py --lat 48.8566 --lon 2.3522 --radius 50 --global
 
 **Options:**
 
-| Flag             | Default     | Description                                 |
-| ---------------- | ----------- | ------------------------------------------- |
-| `--lat`, `--lon` | (required)  | Center coordinates                          |
-| `--radius`       | 50          | Coverage radius in km for regional tiles    |
-| `--min-zoom`     | 2           | Minimum zoom level                          |
-| `--max-zoom`     | 12          | Maximum zoom level                          |
-| `--global-zoom`  | 5           | Download ALL tiles globally up to this zoom |
-| `--style`        | dark        | Map style: `dark`, `osm`, `voyager`, `topo` |
-| `--contrast`     | 1.0         | Contrast multiplier (e.g. 1.3 = +30%)       |
-| `--brightness`   | 1.0         | Brightness multiplier                       |
-| `--saturation`   | 1.0         | Color saturation multiplier                 |
-| `--output`       | `map/tiles` | Output directory                            |
+| Flag             | Default       | Description                                 |
+| ---------------- | ------------- | ------------------------------------------- |
+| `--lat`, `--lon` | (required)    | Center coordinates                          |
+| `--radius`       | 50            | Coverage radius in km for regional tiles    |
+| `--min-zoom`     | 2             | Minimum zoom level                          |
+| `--max-zoom`     | 12            | Maximum zoom level                          |
+| `--global-zoom`  | 5             | Download ALL tiles globally up to this zoom |
+| `--style`        | dark          | Map style: `dark`, `osm`, `voyager`, `topo` |
+| `--contrast`     | 1.0           | Contrast multiplier (e.g. 1.3 = +30%)       |
+| `--brightness`   | 1.0           | Brightness multiplier                       |
+| `--saturation`   | 1.0           | Color saturation multiplier                 |
+| `--output`       | `map/<style>` | Output directory                            |
 
 After downloading, copy the style folder (e.g. `map/dark/`) to `/sdcard/map/` on the device SD card, so tiles end up at `/sdcard/map/dark/{z}/{x}/{y}.jpg`. You can have multiple styles on the card and switch between them in **Settings → System → Map style**.
 
