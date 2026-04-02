@@ -1853,10 +1853,8 @@ void AppNodes::_handle_node_list_input()
         {
             _data.hal->playNextSound();
             _data.hal->keyboard()->waitForRelease(KEY_NUM_BACKSPACE);
-            // Load the selected node from storage
-            _data.selected_node_valid = _data.hal->nodedb()->getNodeByIndex(_data.selected_index, _data.selected_node);
             // delete selected node
-            if (_data.selected_node_valid)
+            if (_selected_node_valid())
             {
                 _data.selected_node_id = _data.selected_node.info.num;
                 std::string name = Mesh::NodeDB::getLongLabel(_data.selected_node);
@@ -4693,7 +4691,11 @@ std::string AppNodes::_format_node_id(uint32_t id)
 
 bool AppNodes::_selected_node_valid()
 {
-    return _data.selected_node_valid = _data.total_node_count > 0
-                                           ? _data.hal->nodedb()->getNodeByIndex(_data.selected_index, _data.selected_node)
-                                           : false;
+    if (_data.total_node_count == 0)
+        return _data.selected_node_valid = false;
+    if (_data.list_selected_node_id != 0)
+        return _data.selected_node_valid =
+                   _data.hal->nodedb()->getNode(_data.list_selected_node_id, _data.selected_node);
+    return _data.selected_node_valid =
+               _data.hal->nodedb()->getNodeByIndex(_data.selected_index, _data.selected_node);
 }
