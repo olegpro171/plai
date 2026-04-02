@@ -8,6 +8,14 @@
   <img src="pics/nodes_list.png" width="480" alt="Plai Node List">
 </p>
 
+<p align="center">
+  <a href="https://youtu.be/2kFs07OOl1w">
+    <img src="https://img.youtube.com/vi/2kFs07OOl1w/maxresdefault.jpg" width="480" alt="Plai Demo Video">
+  </a>
+  <br>
+  <a href="https://youtu.be/2kFs07OOl1w">Watch the demo video</a>
+</p>
+
 Most Meshtastic nodes rely on a phone via BLE or WiFi. Plai takes a different approach: it turns the CardPuter into a **self-contained messaging terminal**. No phone required — just you, the LoRa CAP, and the keyboard.
 
 ## Why Plai?
