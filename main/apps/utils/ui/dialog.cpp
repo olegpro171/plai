@@ -207,8 +207,6 @@ namespace UTILS
                 // Handle input
                 hal->keyboard()->updateKeyList();
                 hal->keyboard()->updateKeysState();
-                // Screenshot support
-                UTILS::SCREENSHOT_TOOLS::check_and_handle_screenshot(hal, nullptr);
                 if (hal->keyboard()->isPressed())
                 {
                     if (hal->keyboard()->isKeyPressing(KEY_NUM_LEFT))
@@ -316,6 +314,7 @@ namespace UTILS
                     hal->canvas_update();
                     need_update = false;
                 }
+                UTILS::SCREENSHOT_TOOLS::check_and_handle_screenshot(hal, nullptr);
                 hal->updateMesh();
                 delay(5);
             }
@@ -546,8 +545,6 @@ namespace UTILS
                 // Handle input
                 hal->keyboard()->updateKeyList();
                 hal->keyboard()->updateKeysState();
-                // Screenshot support
-                UTILS::SCREENSHOT_TOOLS::check_and_handle_screenshot(hal, nullptr);
                 auto keys_state = hal->keyboard()->keysState();
                 // Draw controls hint
                 hl_text_render(&hint_ctx,
@@ -559,6 +556,7 @@ namespace UTILS
                                THEME_COLOR_BG);
 
                 hal->canvas_update();
+                UTILS::SCREENSHOT_TOOLS::check_and_handle_screenshot(hal, nullptr);
 
                 if (hal->home_button()->is_pressed())
                 {
@@ -799,8 +797,6 @@ namespace UTILS
                 // Handle input
                 hal->keyboard()->updateKeyList();
                 hal->keyboard()->updateKeysState();
-                // Screenshot support
-                UTILS::SCREENSHOT_TOOLS::check_and_handle_screenshot(hal, nullptr);
                 auto keys_state = hal->keyboard()->keysState();
 
                 // Draw keyboard mode indicator
@@ -871,6 +867,7 @@ namespace UTILS
                 }
 
                 hal->canvas_update();
+                UTILS::SCREENSHOT_TOOLS::check_and_handle_screenshot(hal, nullptr);
 
                 if (hal->home_button()->is_pressed())
                 {

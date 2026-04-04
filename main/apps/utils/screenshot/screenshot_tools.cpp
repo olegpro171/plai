@@ -138,76 +138,61 @@ namespace UTILS
                 return false;
             }
 
-            // Chunked reading - process 15 rows at a time to minimize memory footprint
-            const int32_t CHUNK_ROWS = 15;
-            const int32_t chunk_pixel_count = width * CHUNK_ROWS;
+            // Read from canvas sprites (in-memory) instead of display hardware
+            // to avoid SPI readback color/alignment issues.
+            // Layout: canvas_system_bar at y=0, canvas below it.
+            int32_t sys_bar_h = hal->canvas_system_bar()->height();
 
-            // Allocate buffers for chunk processing
-            uint8_t* rgb_chunk_buffer = (uint8_t*)malloc(chunk_pixel_count * 3);
-            uint8_t* bmp_row_buffer = (uint8_t*)malloc(row_size);
+            uint8_t* rgb_row = (uint8_t*)malloc(width * 3);
+            uint8_t* bmp_row = (uint8_t*)malloc(row_size);
 
-            if (!rgb_chunk_buffer || !bmp_row_buffer)
+            if (!rgb_row || !bmp_row)
             {
-                ESP_LOGE(TAG, "Failed to allocate memory for chunked screenshot");
-                if (rgb_chunk_buffer)
-                    free(rgb_chunk_buffer);
-                if (bmp_row_buffer)
-                    free(bmp_row_buffer);
+                ESP_LOGE(TAG, "Failed to allocate row buffers");
+                free(rgb_row);
+                free(bmp_row);
                 fclose(file);
                 return false;
             }
 
-            ESP_LOGI(TAG,
-                     "Screenshot using chunked reading (%d rows at a time, buffer size: %d bytes)",
-                     CHUNK_ROWS,
-                     chunk_pixel_count * 3 + row_size);
-            // Process display in chunks from bottom to top (BMP format requirement)
             bool success = true;
-            for (int32_t chunk_start_y = height - CHUNK_ROWS; chunk_start_y >= -CHUNK_ROWS + 1; chunk_start_y -= CHUNK_ROWS)
+            for (int32_t y_bmp = 0; y_bmp < height; y_bmp++)
             {
-                // Calculate actual chunk boundaries
-                int32_t actual_start_y = (chunk_start_y < 0) ? 0 : chunk_start_y;
-                int32_t actual_end_y = actual_start_y + CHUNK_ROWS - 1;
-                if (actual_end_y >= height)
-                    actual_end_y = height - 1;
-                int32_t actual_chunk_height = actual_end_y - actual_start_y + 1;
+                int32_t y_screen = height - 1 - y_bmp; // BMP rows are bottom-up
 
-                // Read chunk from display
-                hal->display()->readRectRGB(0, actual_start_y, width, actual_chunk_height, rgb_chunk_buffer);
-
-                // Write rows from this chunk in reverse order (bottom-up for BMP)
-                for (int32_t chunk_row = actual_chunk_height - 1; chunk_row >= 0; chunk_row--)
+                lgfx::LGFXBase* src;
+                int32_t src_y;
+                if (y_screen < sys_bar_h)
                 {
-                    uint8_t* src_row = rgb_chunk_buffer + (chunk_row * width * 3);
-
-                    // Convert RGB to BGR format and write to row buffer
-                    for (int32_t x = 0; x < width; x++)
-                    {
-                        // BMP uses BGR format
-                        bmp_row_buffer[x * 3 + 0] = src_row[x * 3 + 0]; // B
-                        bmp_row_buffer[x * 3 + 1] = src_row[x * 3 + 2]; // G
-                        bmp_row_buffer[x * 3 + 2] = src_row[x * 3 + 1]; // R
-                    }
-
-                    // Pad row to multiple of 4 bytes
-                    memset(bmp_row_buffer + width * 3, 0, row_size - width * 3);
-
-                    // Write row to file
-                    if (fwrite(bmp_row_buffer, 1, row_size, file) != row_size)
-                    {
-                        ESP_LOGE(TAG, "Failed to write pixel data at chunk y=%d", chunk_start_y);
-                        success = false;
-                        break;
-                    }
+                    src = hal->canvas_system_bar();
+                    src_y = y_screen;
+                }
+                else
+                {
+                    src = hal->canvas();
+                    src_y = y_screen - sys_bar_h;
                 }
 
-                if (!success)
+                src->readRectRGB(0, src_y, width, 1, rgb_row);
+
+                for (int32_t x = 0; x < width; x++)
+                {
+                    bmp_row[x * 3 + 0] = rgb_row[x * 3 + 2]; // B
+                    bmp_row[x * 3 + 1] = rgb_row[x * 3 + 1]; // G
+                    bmp_row[x * 3 + 2] = rgb_row[x * 3 + 0]; // R
+                }
+                memset(bmp_row + width * 3, 0, row_size - width * 3);
+
+                if (fwrite(bmp_row, 1, row_size, file) != row_size)
+                {
+                    ESP_LOGE(TAG, "Failed to write row %d", y_bmp);
+                    success = false;
                     break;
+                }
             }
 
-            // Cleanup
-            free(bmp_row_buffer);
-            free(rgb_chunk_buffer);
+            free(bmp_row);
+            free(rgb_row);
             fclose(file);
 
             if (success)
