@@ -490,10 +490,42 @@ Built from scratch on ESP-IDF — not a fork of the Meshtastic firmware.
 
 ### Build & Flash
 
+**Windows — one command** (recommended). From the repo root, run `.\flash.ps1` — or just double-click **`flash.bat`**:
+
+```powershell
+.\flash.ps1
+```
+
+`flash.ps1` performs any missing one-time setup (it generates the nanopb protobuf code, which
+is *not* committed), activates ESP-IDF, builds, auto-detects the CardPuter's COM port, and
+flashes — warning you first before it resets the device's saved keys. Useful flags:
+
+| Flag       | Effect                                                          |
+| ---------- | --------------------------------------------------------------- |
+| `-AppOnly` | Flash only the app; **keeps** your mesh keys (routine update)   |
+| `-Monitor` | Open the serial monitor after flashing                          |
+| `-NoFlash` | Build only                                                      |
+| `-Regen`   | Force-regenerate the protobuf code                              |
+| `-Yes`     | Skip the NVS-wipe confirmation (non-interactive)                |
+| `-Help`    | Full usage                                                      |
+
+> **Heads-up:** a *full* flash rewrites NVS with factory defaults, wiping your mesh/channel
+> keys. Back them up on-device first (Settings → Export), or use `-AppOnly` to preserve them.
+
+**Manual / other platforms.** The committed `sdkconfig` already targets `esp32s3`, so **do not
+run `idf.py set-target`** — it regenerates `sdkconfig` from defaults and wipes the tuned config.
+Generate the protobuf code once before the first build (this is what `flash.ps1` automates):
+
 ```bash
-idf.py set-target esp32s3
+# one-time: fetch proto sources and generate the nanopb code (gitignored, not committed)
+git clone --depth 1 https://github.com/meshtastic/protobufs.git protobufs
+python -m venv .protovenv && .protovenv/bin/pip install grpcio-tools
+.protovenv/bin/python components/Nanopb/generator/nanopb_generator.py \
+    -S .cpp -I protobufs -D main protobufs/meshtastic/*.proto
+
+# build & flash
 idf.py build
-idf.py -p COMx flash monitor
+idf.py -p <PORT> flash monitor
 ```
 
 ### HAL Configuration

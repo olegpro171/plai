@@ -11,11 +11,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ESP-IDF **v5.5.4** (target `esp32s3`) is required. There is no host test framework — this is embedded firmware verified by building and running on hardware.
 
 ```bash
-# One-time prerequisite (see "Protobufs" below) — main/meshtastic/ is generated & gitignored
-git submodule update --init          # fetch the meshtastic/protobufs submodule
-# then generate the Nanopb sources into main/meshtastic/ (regen-protos.bat on Windows)
+# Windows: one command does setup + build + flash (auto-detects port; see `flash.ps1 -Help`).
+.\flash.ps1                          # or double-click flash.bat
 
-idf.py set-target esp32s3
+# Manual / other platforms. main/meshtastic/ is generated & gitignored — generate it once
+# first (see "Protobufs" below). The committed sdkconfig already targets esp32s3, so do NOT
+# run `idf.py set-target` (it regenerates sdkconfig from defaults and wipes the tuned config).
 idf.py build
 idf.py -p <PORT> flash monitor       # e.g. -p /dev/cu.usbmodem* on macOS
 
@@ -69,7 +70,7 @@ Apps present: `launcher`, `app_settings`, `app_nodes`, `app_channels`, `app_moni
 **Persistence split (important):** mesh keys and device config live in **NVS** and are wiped by a firmware reflash unless exported to SD first. The node database and chat history live on the **SD card** (`/sdcard/meshtastic/`) and survive firmware updates. SD layout includes `nodes/`, `messages/`, `traceroute/`, `neighbors/`, plus `prefs.pb`, `channels.pb`, `favorites.dat`, `ignorelist.dat`, `templates.txt`; emoji at `/sdcard/emoji/u<HEX>.png` and map tiles at `/sdcard/map/<style>/{z}/{x}/{y}.jpg`.
 
 ### Protobufs (`main/meshtastic/`) — generated, gitignored
-The Nanopb-generated C sources in `main/meshtastic/` are **not checked in** (gitignored) and **must be generated before the first build**. They come from the `meshtastic/protobufs` git submodule. Regeneration is done by [regen-protos.bat](regen-protos.bat), which runs Nanopb's `protoc` over `protobufs/meshtastic/*.proto`. Note that script is Windows-only with a hardcoded toolchain path — on other platforms, run the equivalent `nanopb_generator` invocation. This generated layer is what provides Meshtastic wire compatibility.
+The Nanopb-generated C sources in `main/meshtastic/` are **not checked in** (gitignored) and **must be generated before the first build**. They come from the `meshtastic/protobufs` repo, cloned into `protobufs/` (the `.gitmodules` submodule is not wired up, so clone it directly). On Windows, [flash.ps1](flash.ps1) generates them automatically (force a refresh with `.\flash.ps1 -Regen`); under the hood it runs the bundled Nanopb generator: `nanopb_generator.py -S .cpp -I protobufs -D main protobufs/meshtastic/*.proto`. This generated layer is what provides Meshtastic wire compatibility.
 
 ## Conventions
 
