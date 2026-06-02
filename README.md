@@ -480,7 +480,7 @@ Built from scratch on ESP-IDF — not a fork of the Meshtastic firmware.
 
 ### Prerequisites
 
-- [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/get-started/) (project tested with **5.5.3**)
+- [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32s3/get-started/) (project tested with **5.5.4**)
 - ESP32-S3 target
 
 ### Build & Flash
