@@ -7,3 +7,10 @@ archive
 main/meshtastic/*
 tools
 protobufs
+
+# Python bytecode (e.g. nanopb generator)
+__pycache__/
+*.pyc
+
+# nanopb_pb2.py is regenerated into the vendored component by the generator
+components/Nanopb/generator/proto/nanopb_pb2.py

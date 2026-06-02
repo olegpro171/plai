@@ -80,7 +80,7 @@ Full node management with up to 1000 nodes persisted on SD card.
 
 - Direct messaging with delivery status (pending → sent → ACK → delivered → failed)
 - Channel invitation _hotkey_ [I] — invite the node to a channel (sends `#invite name=key` DM)
-- Full keyboard input with Cyrillic layout support
+- Full keyboard input with English, Ukrainian, and Russian layouts (switch with [OPT])
 - File-backed message history on SD card
 - Clear chat _hotkey_ [BACKSPACE] to clear all messages
 - Hold [CTRL] to display message info (**timestamps in local time**)
@@ -484,7 +484,7 @@ Built from scratch on ESP-IDF — not a fork of the Meshtastic firmware.
 
 ### Prerequisites
 
-- [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/get-started/) (project tested with **5.5.3**)
+- [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32s3/get-started/) (project tested with **5.5.4**)
 - ESP32-S3 target
 
 ### Build & Flash
