@@ -76,7 +76,7 @@ Full node management with up to 1000 nodes persisted on SD card.
 
 - Direct messaging with delivery status (pending → sent → ACK → delivered → failed)
 - Channel invitation _hotkey_ [I] — invite the node to a channel (sends `#invite name=key` DM)
-- Full keyboard input with Cyrillic layout support
+- Full keyboard input with English, Ukrainian, and Russian layouts (switch with [OPT])
 - File-backed message history on SD card
 - Clear chat _hotkey_ [BACKSPACE] to clear all messages
 - Hold [CTRL] to display message info (**timestamps in local time**)
