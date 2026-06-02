@@ -6,7 +6,7 @@
 
 > [!NOTE]
 > **This is a fork of [d4rkmen/plai](https://github.com/d4rkmen/plai).**
-> The upstream project provides English and Ukrainian (ЙЦУКЕН) on-screen keyboard layouts but does not include a Russian layout. The goal of this fork is to **add a Russian keyboard layout** to Plai's standalone keyboard input.
+> Upstream ships English and Ukrainian (ЙЦУКЕН) on-screen keyboard layouts only. This fork **adds a standard Russian (ЙЦУКЕН) keyboard layout** to Plai's standalone keyboard input — press **[OPT]** in any text field to cycle English → Ukrainian → Russian.
 
 <p align="center">
   <img src="pics/nodes_list.png" width="1280" alt="Plai Node List">

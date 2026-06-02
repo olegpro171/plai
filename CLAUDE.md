@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build, Flash, Develop
 
-ESP-IDF **v5.5.3** (target `esp32s3`) is required. There is no host test framework — this is embedded firmware verified by building and running on hardware.
+ESP-IDF **v5.5.4** (target `esp32s3`) is required. There is no host test framework — this is embedded firmware verified by building and running on hardware.
 
 ```bash
 # One-time prerequisite (see "Protobufs" below) — main/meshtastic/ is generated & gitignored
@@ -59,6 +59,7 @@ Cross-app data is shared through mooncake's `SimpleKV` key-value `_database`, po
 - Draw into the `LGFX_Sprite` framebuffer `hal->canvas()`, then present with `hal->canvas_update()`. The status bar is a separate sprite (`hal->canvas_system_bar()` / `canvas_system_bar_update()`).
 - Poll input by calling `hal->keyboard()->updateKeyList()` + `updateKeysState()`, then `isKeyPressing(KEY_NUM_*)`, `keysState().ctrl`, `waitForRelease(...)`.
 - Shared UI lives in `apps/utils/`: `ui/dialog` (modal dialogs/confirmations), `ui/settings_screen`, `ui/key_repeat`, `theme/` (efont Unicode fonts + SD-card emoji PNG rendering), `screenshot/` (CTRL+SPACE → save PNG to SD), `smooth_menu/` (launcher), `anim/` (scrolling/highlight text), `text/`, `icon/`.
+- **On-screen keyboard layouts** for text entry are defined in [dialog.cpp](main/apps/utils/ui/dialog.cpp) as the `kbd_layouts[]` array — English (default), Ukrainian (ЙЦУКЕН), and Russian (ЙЦУКЕН). Each `KbdLayout` is two 47-entry arrays (`chars` / `chars_shift`) indexed positionally by the `key_nums[]` physical-key map, plus a mode label + color. `[OPT]` cycles layouts (`(kbd_layout + 1) % KBD_LAYOUT_COUNT`, auto-sized from the array) and the renderer overlays Latin→Cyrillic for any non-English layout — so **adding a layout is purely additive**: append one entry to `kbd_layouts[]` (UTF-8 strings; the `efont_unicode_*` fonts already cover Cyrillic glyphs).
 
 Apps present: `launcher`, `app_settings`, `app_nodes`, `app_channels`, `app_monitor`, `app_stats`. `app_graphs` exists but is disabled (`#if 0`).
 
