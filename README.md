@@ -6,7 +6,7 @@
 
 > [!NOTE]
 > **This is a fork of [d4rkmen/plai](https://github.com/d4rkmen/plai).**
-> Upstream ships English and Ukrainian (ЙЦУКЕН) on-screen keyboard layouts only. This fork **adds a standard Russian (ЙЦУКЕН) keyboard layout** to Plai's standalone keyboard input — press **[OPT]** in any text field to cycle English → Ukrainian → Russian.
+> Upstream ships English and Ukrainian (ЙЦУКЕН) on-screen keyboard layouts only. This fork **adds a standard Russian (ЙЦУКЕН) keyboard layout** to Plai's standalone keyboard input — press **[OPT]** in any text field to cycle English → Ukrainian → Russian. Layouts you don't use can be switched off in **Settings → Keyboard**, so [OPT] cycles only the ones you want (English stays on).
 
 <p align="center">
   <img src="pics/nodes_list.png" width="1280" alt="Plai Node List">
@@ -420,6 +420,7 @@ Node database and chat history are stored on SD card and not affected by firmwar
 </p>
 
 - System: brightness, volume, timezone
+- Keyboard: enable/disable the on-screen layouts cycled with [OPT] — English is always on; toggle Ukrainian and Russian
 - LoRa: region, modem preset, TX power, hop limit
 - Security: channel PSK management, invitations (auto-add channels from `#invite` DMs), **derive public key from private key** (X25519)
 - Node info: name, short name, role

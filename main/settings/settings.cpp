@@ -592,7 +592,17 @@ namespace SETTINGS
             }
         };
 
+        SettingGroup_t kbd_group;
+        kbd_group.name = "Keyboard";
+        kbd_group.nvs_namespace = "keyboard";
+        kbd_group.items = {
+            back_item,
+            {"uk_enabled", "Ukrainian layout", TYPE_BOOL, "true", "true", "", "", "Include Ukrainian layout in OPT cycle"},
+            {"ru_enabled", "Russian layout", TYPE_BOOL, "true", "true", "", "", "Include Russian layout in OPT cycle"},
+        };
+
         _metadata = {sys_group,
+                     kbd_group,
                      lora_group,
                      security_group,
                      nodeinfo_group,

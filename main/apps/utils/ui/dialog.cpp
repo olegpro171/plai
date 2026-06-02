@@ -26,6 +26,7 @@ struct KbdLayout
     const char* label_upper;                      // mode indicator (uppercase)
     uint32_t color_lower;                         // indicator color (lowercase)
     uint32_t color_upper;                         // indicator color (uppercase)
+    const char* enabled_key;                      // NVS key in "keyboard" ns; nullptr = always enabled
 };
 
 static const KbdLayout kbd_layouts[] = {
@@ -34,34 +35,48 @@ static const KbdLayout kbd_layouts[] = {
       "\\", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", " "},
      {"!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "-", "+",  "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "{", "}",
       "|", "A", "S", "D", "F", "G", "H", "J", "K", "L", ":", "\"", "Z", "X", "C", "V", "B", "N", "M", "<", ">", "?", " "},
-     "abc",
-     "ABC",
+     "eng",
+     "ENG",
      THEME_COLOR_KEYBOARD_LOWER,
-     THEME_COLOR_KEYBOARD_UPPER},
+     THEME_COLOR_KEYBOARD_UPPER,
+     nullptr},
     // Ukrainian (ЙЦУКЕН)
     {{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з", "х", "ї",
       "ґ", "ф", "і", "в", "а", "п", "р", "о", "л", "д", "ж", "є", "я", "ч", "с", "м", "и", "т", "ь", "б", "ю", ".", " "},
      {"!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "Й", "Ц", "У", "К", "Е", "Н", "Г", "Ш", "Щ", "З", "Х", "Ї",
       "Ґ", "Ф", "І", "В", "А", "П", "Р", "О", "Л", "Д", "Ж", "Є", "Я", "Ч", "С", "М", "И", "Т", "Ь", "Б", "Ю", ",", " "},
-     "абв",
-     "АБВ",
+     "укр",
+     "УКР",
      THEME_COLOR_KEYBOARD_LOWER,
-     THEME_COLOR_KEYBOARD_UPPER},
+     THEME_COLOR_KEYBOARD_UPPER,
+     "uk_enabled"},
     // Russian (ЙЦУКЕН)
     {{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з", "х", "ъ",
       "ё", "ф", "ы", "в", "а", "п", "р", "о", "л", "д", "ж", "э", "я", "ч", "с", "м", "и", "т", "ь", "б", "ю", ".", " "},
      {"!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "Й", "Ц", "У", "К", "Е", "Н", "Г", "Ш", "Щ", "З", "Х", "Ъ",
       "Ё", "Ф", "Ы", "В", "А", "П", "Р", "О", "Л", "Д", "Ж", "Э", "Я", "Ч", "С", "М", "И", "Т", "Ь", "Б", "Ю", ",", " "},
-     "абв",
-     "АБВ",
+     "рус",
+     "РУС",
      THEME_COLOR_KEYBOARD_LOWER,
-     THEME_COLOR_KEYBOARD_UPPER},
+     THEME_COLOR_KEYBOARD_UPPER,
+     "ru_enabled"},
 };
 
 static constexpr int KBD_LAYOUT_COUNT = sizeof(kbd_layouts) / sizeof(kbd_layouts[0]);
 
 // Keyboard layout state (persists across dialog invocations)
 static int kbd_layout = 0;
+
+// English (enabled_key==nullptr) is always enabled; others gated by the "keyboard" NVS ns.
+static bool is_layout_enabled(HAL::Hal* hal, int idx)
+{
+    if (idx < 0 || idx >= KBD_LAYOUT_COUNT)
+        return false;
+    const char* key = kbd_layouts[idx].enabled_key;
+    if (key == nullptr)
+        return true;
+    return hal->settings()->getBool("keyboard", key);
+}
 
 using namespace UTILS::HL_TEXT;
 namespace UTILS
@@ -730,6 +745,20 @@ namespace UTILS
             int cursor_pos = utf8_strlen(input);
             int scroll_offset = 0;
 
+            // If the persisted layout was disabled since last use, snap to a valid one.
+            // English (idx 0) is always enabled, so this always lands on a valid layout.
+            if (!is_layout_enabled(hal, kbd_layout))
+            {
+                for (int i = 0; i < KBD_LAYOUT_COUNT; i++)
+                {
+                    if (is_layout_enabled(hal, i))
+                    {
+                        kbd_layout = i;
+                        break;
+                    }
+                }
+            }
+
             const uint8_t key_nums[] = {
                 KEY_NUM_1,         KEY_NUM_2,    KEY_NUM_3,    KEY_NUM_4,     KEY_NUM_5,          KEY_NUM_6,
                 KEY_NUM_7,         KEY_NUM_8,    KEY_NUM_9,    KEY_NUM_0,     KEY_NUM_UNDERSCORE, KEY_NUM_EQUAL,
@@ -960,7 +989,14 @@ namespace UTILS
                     {
                         hal->playNextSound();
                         hal->keyboard()->waitForRelease(KEY_NUM_OPT);
-                        kbd_layout = (kbd_layout + 1) % KBD_LAYOUT_COUNT;
+                        // Advance to the next ENABLED layout. English (idx 0) is always enabled,
+                        // so this terminates within KBD_LAYOUT_COUNT iterations (no infinite loop).
+                        for (int i = 0; i < KBD_LAYOUT_COUNT; i++)
+                        {
+                            kbd_layout = (kbd_layout + 1) % KBD_LAYOUT_COUNT;
+                            if (is_layout_enabled(hal, kbd_layout))
+                                break;
+                        }
                     }
                     else
                     {
