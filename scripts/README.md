@@ -4,7 +4,8 @@ Launcher app icons are **56×56 RGB565**, stored **byte-swapped** (big-endian, t
 match the ST7789 / LovyanGFX panel) with **`0x8631`** as the transparent color
 key. These two scripts hide those details so the colors come out right on device.
 
-Requires Pillow (`pip install pillow`). Run from the repo root.
+Requires Pillow (`pip install pillow`). Default paths resolve relative to the
+repo, so you can run these from any directory.
 
 ## Make / replace an app icon
 

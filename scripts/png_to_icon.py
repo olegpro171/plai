@@ -29,6 +29,10 @@ SIZE = 56
 TRANSPARENT = 0x8631      # color key (matched on the raw stored value, never swapped)
 ALPHA_THRESHOLD = 128
 
+# This file lives in scripts/. Resolve default paths relative to the repo root so
+# the tool writes to the right place no matter which directory it is run from.
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 def rgb565(r, g, b):
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
@@ -73,7 +77,7 @@ def convert(png_path, out_path, var):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="PNG -> Plai app-icon header (byte-swapped RGB565)")
     ap.add_argument("png", help="source PNG (ideally 56x56 with a transparent background)")
-    ap.add_argument("--out", default=os.path.join("main", "apps", "app_charge", "assets", "app_charge.h"),
+    ap.add_argument("--out", default=os.path.join(REPO, "main", "apps", "app_charge", "assets", "app_charge.h"),
                     help="output header path")
     ap.add_argument("--var", default="image_data_app_charge", help="C array name")
     args = ap.parse_args()
