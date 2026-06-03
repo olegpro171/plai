@@ -1044,7 +1044,9 @@ namespace Mesh
     {
         // blonk yellow led
         _hal->led()->blink_once(HAL::Color(255, 255, 0), 100);
-        if ((time_t)data.time <= BUILD_TIMESTAMP)
+        // BUILD_TIMESTAMP is derived from the local build clock; GPS time is UTC.
+        // Allow timezone/build-latency slack so valid UTC fixes are not rejected.
+        if ((time_t)data.time <= BUILD_TIMESTAMP - BUILD_TIME_SLACK_S)
         {
             return;
         }
