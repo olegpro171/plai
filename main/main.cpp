@@ -58,6 +58,7 @@ extern "C" void app_main(void)
     mooncake.installApp(new APPS::AppChannels_Packer);
     mooncake.installApp(new APPS::AppMonitor_Packer);
     mooncake.installApp(new APPS::AppStats_Packer);
+    mooncake.installApp(new APPS::AppCharge_Packer);
 #if 0
     mooncake.installApp(new APPS::AppGraphs_Packer);
 #endif

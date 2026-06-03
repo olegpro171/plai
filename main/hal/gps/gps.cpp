@@ -96,6 +96,14 @@ namespace HAL
 
         _initialized = true;
         ESP_LOGI(TAG, "GPS initialized successfully");
+
+        // Wake the receiver in case a prior charge-mode session left it in PCAS
+        // standby. An ESP reset does NOT power-cycle the GPS (it sits on the
+        // cap's always-on rail), so a persisted standby would otherwise survive
+        // the reboot and the module would never resume NMEA output. Any serial
+        // input wakes a CASIC receiver; this product-info query is harmless.
+        sendCommand("PCAS06,0");
+
         return true;
     }
 

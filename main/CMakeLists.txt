@@ -1,24 +1,34 @@
-file(GLOB_RECURSE APPS_SRCS
+# CONFIGURE_DEPENDS re-globs these directories on every build so newly added
+# sources are compiled without a manual `idf.py reconfigure`. It is only valid in
+# build mode: ESP-IDF also evaluates this file in CMake script mode (to extract
+# component requirements), where CONFIGURE_DEPENDS is rejected, so gate on that.
+if(CMAKE_SCRIPT_MODE_FILE)
+    set(GLOB_CFG_DEPENDS "")
+else()
+    set(GLOB_CFG_DEPENDS CONFIGURE_DEPENDS)
+endif()
+
+file(GLOB_RECURSE APPS_SRCS ${GLOB_CFG_DEPENDS}
     apps/*.c
     apps/*.cpp
 )
 
-file(GLOB_RECURSE HAL_SRCS
+file(GLOB_RECURSE HAL_SRCS ${GLOB_CFG_DEPENDS}
     hal/*.c
     hal/*.cpp
 )
 
-file(GLOB_RECURSE SETTINGS_SRCS
+file(GLOB_RECURSE SETTINGS_SRCS ${GLOB_CFG_DEPENDS}
     settings/*.c
     settings/*.cpp
 )
 
-file(GLOB_RECURSE PROTOS_SRCS
+file(GLOB_RECURSE PROTOS_SRCS ${GLOB_CFG_DEPENDS}
     meshtastic/*.c
     meshtastic/*.cpp
 )
 
-file(GLOB_RECURSE MESH_SRCS
+file(GLOB_RECURSE MESH_SRCS ${GLOB_CFG_DEPENDS}
     mesh/*.c
     mesh/*.cpp
 )

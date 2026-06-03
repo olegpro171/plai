@@ -18,3 +18,4 @@
 #include "app_monitor/app_monitor.h"
 #include "app_stats/app_stats.h"
 #include "app_graphs/app_graphs.h"
+#include "app_charge/app_charge.h"
