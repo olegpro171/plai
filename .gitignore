@@ -8,6 +8,9 @@ main/meshtastic/*
 tools
 protobufs
 
+# generated icon exports (scripts/icons_to_png.py)
+icon_export
+
 # Python bytecode (e.g. nanopb generator)
 __pycache__/
 *.pyc
