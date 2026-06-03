@@ -8,7 +8,7 @@
     generator venv, generate the protobuf code), activates the ESP-IDF environment, builds,
     auto-detects the device's COM port, warns before it wipes the NVS mesh keys, then flashes.
 
-    See docs\BUILD.md for the manual steps this automates and for troubleshooting.
+    See the "Building from Source" section of README.md for the manual steps this automates.
 
 .EXAMPLE
     .\flash.ps1
@@ -199,10 +199,23 @@ function Resolve-ActivationScript {
         return (Join-Path $env:IDF_PATH 'export.ps1')
     }
     throw @"
-ESP-IDF environment not found and could not be auto-activated.
-Create tools\activate-idf.ps1 (see docs\BUILD.md, Step 1) that dot-sources your EIM PowerShell
-profile and sets IDF_PATH / IDF_TOOLS_PATH / IDF_PYTHON_ENV_PATH, or run your ESP-IDF export
-script in this shell before re-running flash.ps1.
+Could not find or activate ESP-IDF, so the firmware can't be built.
+
+Most likely cause: ESP-IDF isn't installed on this machine yet.
+  This project needs ESP-IDF v5.5.x for the esp32s3 target (tested with 5.5.4). On Windows the
+  simplest install is the Espressif IDE / ESP-IDF Installer (EIM):
+      https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32s3/get-started/
+  See the "Building from Source" section of README.md for the project's prerequisites.
+
+If ESP-IDF IS already installed, flash.ps1 just couldn't locate it. It checked, in order:
+  - idf.py already on PATH (i.e. you launched this from an ESP-IDF shell)
+  - the EIM profile at: $($IdfDefaults.Profile)
+  - tools\activate-idf.ps1 in this repo
+  - `$env:IDF_PATH\export.ps1
+  Fix any one of these: open an "ESP-IDF PowerShell" shell and re-run flash.ps1 from there, or
+  run your install's export.ps1 in this shell first. If ESP-IDF lives in a custom location,
+  create tools\activate-idf.ps1 that dot-sources your ESP-IDF profile and sets IDF_PATH,
+  IDF_TOOLS_PATH and IDF_PYTHON_ENV_PATH.
 "@
 }
 
@@ -433,7 +446,7 @@ try {
         Set-StrictMode -Version Latest
         $ErrorActionPreference = $savedEAP
         if (-not (Get-Command idf.py -ErrorAction SilentlyContinue)) {
-            throw "Activation ran but idf.py is still unavailable. Check the paths in tools\activate-idf.ps1 (see docs\BUILD.md)."
+            throw "Activation ran but idf.py is still unavailable. Check that the ESP-IDF paths in tools\activate-idf.ps1 match your install (IDF_PATH / IDF_TOOLS_PATH / IDF_PYTHON_ENV_PATH), or delete that file and re-run from an ESP-IDF PowerShell shell."
         }
     }
     idf.py --version
