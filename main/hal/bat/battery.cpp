@@ -150,12 +150,30 @@ void Battery::deinit()
 float Battery::get_voltage()
 {
     esp_err_t ret;
-    ret = adc_oneshot_read(_adc1_handle, ADC_CHANNEL, &_adc_raw);
-    if (ret != ESP_OK)
+
+    // Average several raw ADC samples to suppress noise, so the derived
+    // percentage (1% resolution) does not twitch between adjacent readings.
+    int32_t raw_acc = 0;
+    int samples = 0;
+    for (int i = 0; i < SAMPLE_COUNT; i++)
     {
-        ESP_LOGE(TAG, "adc_oneshot_read failed, ret: %d", ret);
+        int raw = 0;
+        ret = adc_oneshot_read(_adc1_handle, ADC_CHANNEL, &raw);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "adc_oneshot_read failed, ret: %d", ret);
+            continue;
+        }
+        raw_acc += raw;
+        samples++;
+    }
+
+    if (samples == 0)
+    {
         return 0.0f;
     }
+
+    _adc_raw = static_cast<int>(raw_acc / samples);
 
     ESP_LOGD(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT, ADC_CHANNEL, _adc_raw);
 

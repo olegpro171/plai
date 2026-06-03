@@ -33,6 +33,7 @@ namespace HAL
         constexpr static const adc_channel_t ADC_CHANNEL = ADC_CHANNEL_9;
         constexpr static const adc_atten_t ADC_ATTEN = ADC_ATTEN_DB_12;
         constexpr static const float MEASUREMENT_OFFSET = 1.5f;
+        constexpr static const int SAMPLE_COUNT = 8;
         /**
          * @brief Initialize the battery ADC
          */
@@ -51,14 +52,14 @@ namespace HAL
 
         /**
          * @brief Get battery level percentage
-         * @return Battery level (0, 25, 50, 75, or 100)
+         * @return Battery level percentage (0-100), interpolated from the LiPo curve
          */
         uint8_t get_level();
 
         /**
          * @brief Get battery level based on voltage
          * @param voltage Voltage in volts
-         * @return Battery level (0, 25, 50, 75, or 100)
+         * @return Battery level percentage (0-100), interpolated from the LiPo curve
          */
         uint8_t get_level(float voltage);
     };
