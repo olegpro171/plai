@@ -547,6 +547,12 @@ namespace Mesh
             _radio->setMode(HAL::RadioMode::SLEEP);
         }
 
+        // Drop any queued TX/RX work. With the service stopped these packets can
+        // never be serviced (update() early-returns), and a non-empty TX queue
+        // keeps hasPendingTx() true, which makes the main loop's display-sleep
+        // branch busy-poll at 1 ms instead of idling - defeating low-power mode.
+        _router.clearQueues();
+
         _state = MeshState::UNINITIALIZED;
     }
 

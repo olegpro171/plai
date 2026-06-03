@@ -38,6 +38,7 @@ void Launcher::onCreate()
     _data.hal->speaker()->setVolume(_data.hal->settings()->getNumber("system", "volume"));
     _data.hal->keyboard()->setDimmed(false);
     _data.hal->keyboard()->set_dim_time(_data.hal->settings()->getNumber("system", "dim_time") * 1000);
+    _data.pre_dim_brightness = _data.hal->settings()->getNumber("system", "brightness");
 
     // React to dimmed state changes (e.g. restore brightness when undimmed)
     _data.hal->keyboard()->setDimmedCallback(
@@ -47,12 +48,20 @@ void Launcher::onCreate()
             {
                 ESP_LOGD(TAG, "Screen on");
                 _data.hal->displayWakeup();
-                _data.hal->display()->setBrightness(_data.hal->settings()->getNumber("system", "brightness"));
+                // Restore the brightness that was active before dimming began.
+                // Reading the remembered value (instead of the system default)
+                // lets a custom level - e.g. charge mode's dim backlight -
+                // survive the sleep/wake cycle.
+                _data.hal->display()->setBrightness(_data.pre_dim_brightness);
             }
             else
             {
                 ESP_LOGD(TAG, "Screen off");
-                // slowly dim the screen
+                // Remember the current (pre-dim) brightness so the wake path can
+                // restore it. The dim-down stepping in _update_keyboard_state()
+                // only runs after this transition, so getBrightness() still
+                // holds the live awake value here.
+                _data.pre_dim_brightness = _data.hal->display()->getBrightness();
             }
         });
 

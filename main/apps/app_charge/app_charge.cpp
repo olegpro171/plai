@@ -139,8 +139,12 @@ void AppCharge::_enter_low_power()
         hal->led()->off();
 #endif
 
-    // 4) Dim the backlight (do NOT displaySleep(): that makes main.cpp skip
-    //    mooncake.update() and this app would stop being ticked).
+    // 4) Dim the backlight. We don't sleep the panel ourselves: the normal idle
+    //    timeout (Launcher's keyboard handler) dims it the rest of the way and
+    //    displaySleep()s after `system/dim_time`, which is the deepest low-power
+    //    state. While asleep main.cpp stops ticking us, which is fine - a wake
+    //    keypress restores the backlight to THIS dim level (Launcher remembers
+    //    the pre-dim brightness) and resumes ticking, it does not exit.
     hal->display()->setBrightness(CHARGE_BRIGHTNESS);
 
     // 5) Drop the CPU. Never restored (exit = reboot).

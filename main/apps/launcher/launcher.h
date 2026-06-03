@@ -60,6 +60,12 @@ namespace MOONCAKE
                 uint32_t system_bar_update_preiod = 1000;
                 uint32_t system_bar_update_count = 0;
                 SystemState_t system_state;
+
+                // Brightness to restore when the screen wakes from the idle
+                // dim/sleep. Captured just before dimming begins so a custom
+                // level (e.g. charge mode's dim backlight) survives sleep -> wake
+                // instead of snapping back to the system default.
+                uint8_t pre_dim_brightness = 100;
             };
             Data_t _data;
 
