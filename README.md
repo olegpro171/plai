@@ -430,6 +430,10 @@ Node database and chat history are stored on SD card and not affected by firmwar
 - Clear all nodes
 - UI: **GPS** status icon in the bar only when there is a **position fix**; footer **hints** restored on multi-choice dialogs
 
+### Charge
+
+A low-power charging screen. Plai normally runs the radio, GPS and CPU at full tilt, so the CardPuter charges slowly while in use. Open **Charge** from the launcher to minimise draw: it stops the LoRa radio, puts the GPS into standby, drops the CPU to 80 MHz and dims the screen, showing battery %/voltage. It is **one-way** — restart the device to exit (a fresh boot restores everything).
+
 ## Hardware
 
 ### Required
@@ -562,6 +566,7 @@ Plai/
 │   │   ├── app_monitor/       # Live packet feed
 │   │   ├── app_stats/        # Network & system statistics
 │   │   ├── app_settings/     # Configuration UI
+│   │   ├── app_charge/        # Low-power charging mode
 │   │   └── utils/             # Shared UI components
 │   ├── hal/                   # Hardware Abstraction Layer
 │   │   ├── hal.h              # Base HAL class
@@ -580,6 +585,9 @@ Plai/
 │   └── main.cpp               # Entry point
 ├── map/
 │   └── download_osm_tiles.py  # OSM tile downloader for offline map
+├── scripts/
+│   ├── png_to_icon.py         # PNG -> app-icon header (byte-swapped RGB565)
+│   └── icons_to_png.py        # decode app icons back to PNG
 ├── components/
 │   ├── LovyanGFX/             # Display graphics library
 │   ├── mooncake/              # App framework
