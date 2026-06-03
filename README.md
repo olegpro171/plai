@@ -5,8 +5,21 @@
 > _Plai_ is the Ukrainian word for a mountain trail — a reliable path for your data to travel when you're off the beaten track.
 
 > [!NOTE]
-> **This is a fork of [d4rkmen/plai](https://github.com/d4rkmen/plai).**
-> Upstream ships English and Ukrainian (ЙЦУКЕН) on-screen keyboard layouts only. This fork **adds a standard Russian (ЙЦУКЕН) keyboard layout** to Plai's standalone keyboard input — press **[OPT]** in any text field to cycle English → Ukrainian → Russian. Layouts you don't use can be switched off in **Settings → Keyboard**, so [OPT] cycles only the ones you want (English stays on).
+> **This is a fork of [d4rkmen/plai](https://github.com/d4rkmen/plai)** that has grown well beyond its original purpose. What this fork adds on top of upstream:
+>
+> **Input**
+> - **Russian (ЙЦУКЕН) keyboard layout** — upstream ships English and Ukrainian only. Press **[OPT]** in any text field to cycle English → Ukrainian → Russian.
+> - **Enable/disable layouts** in **Settings → Keyboard** — [OPT] cycles only the layouts you keep on (English is always on).
+>
+> **Apps & power**
+> - **[Charge app](#charge)** — a one-way low-power charging screen: stops the LoRa radio, parks the GPS in standby, drops the CPU to 80 MHz and dims the backlight, so the CardPuter actually charges while idle (restart to exit).
+> - **Accurate battery percentage** — battery % is interpolated across the LiPo discharge curve (0–100 %) with multi-sample ADC averaging, instead of upstream's coarse 0 / 25 / 50 / 75 / 100 buckets.
+> - **Power & reliability fixes** — the mesh TX/RX queues are flushed when the service stops (so display sleep truly idles instead of busy-polling), the GPS is woken from a persisted standby on boot, and the neighbor-info broadcast default is applied correctly.
+>
+> **Build & tooling (Windows-first)**
+> - **One-command build & flash** — `.\flash.ps1` (or double-click `flash.bat`) generates the protobufs, builds, auto-detects the COM port, and flashes, with a guard against wiping your mesh keys. See [Building from Source](#building-from-source).
+> - **ESP-IDF 5.5.4** baseline and an enlarged app partition to fit the expanded firmware.
+> - **Icon tooling** — `scripts/png_to_icon.py` / `scripts/icons_to_png.py` convert PNGs to and from the byte-swapped RGB565 launcher-icon format ([scripts/README.md](scripts/README.md)).
 
 <p align="center">
   <img src="pics/nodes_list.png" width="1280" alt="Plai Node List">
