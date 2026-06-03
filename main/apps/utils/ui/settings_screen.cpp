@@ -38,6 +38,30 @@ namespace UTILS
     {
         namespace SETTINGS_SCREEN
         {
+            // Determine whether an item should currently be shown, based on its optional
+            // conditional-visibility rule (visible_when_key / visible_when_value).
+            static bool is_item_visible(HAL::Hal* hal,
+                                        const SETTINGS::SettingGroup_t& group,
+                                        const SETTINGS::SettingItem_t& item)
+            {
+                if (item.visible_when_key.empty())
+                    return true;
+                return hal->settings()->getString(group.nvs_namespace, item.visible_when_key) == item.visible_when_value;
+            }
+
+            // Build the list of currently visible items (pointers into the live group.items),
+            // so rendering and navigation share the exact same indexing.
+            static std::vector<SETTINGS::SettingItem_t*> get_visible_items(HAL::Hal* hal, SETTINGS::SettingGroup_t& group)
+            {
+                std::vector<SETTINGS::SettingItem_t*> visible;
+                visible.reserve(group.items.size());
+                for (auto& item : group.items)
+                {
+                    if (is_item_visible(hal, group, item))
+                        visible.push_back(&item);
+                }
+                return visible;
+            }
             bool render_groups(HAL::Hal* hal, const std::vector<SETTINGS::SettingGroup_t>& groups, HLTextContext_t* hint_ctx)
             {
                 if (!need_render)
@@ -101,9 +125,11 @@ namespace UTILS
                 int line_height = hal->canvas()->fontHeight(FONT_16) + 2 + 1;
                 int max_visible_lines = (hal->canvas()->height() - y_offset - HINT_HEIGHT) / line_height;
 
-                for (size_t i = scroll_offset; i < group.items.size() && items_drawn < max_visible_lines; i++)
+                auto visible_items = get_visible_items(hal, group);
+
+                for (size_t i = scroll_offset; i < visible_items.size() && items_drawn < max_visible_lines; i++)
                 {
-                    auto& item = group.items[i];
+                    auto& item = *visible_items[i];
 
                     if (i == selected_item)
                     {
@@ -165,7 +191,7 @@ namespace UTILS
                                           ITEMS_Y_OFFSET,
                                           6,
                                           line_height * max_visible_lines,
-                                          (int)group.items.size(),
+                                          (int)visible_items.size(),
                                           max_visible_lines,
                                           scroll_offset);
 
@@ -183,7 +209,22 @@ namespace UTILS
                     return false;
                 }
 
-                std::string desc = group.items[selected_item].hint;
+                // Resolve the selected item against the currently visible items so the
+                // description matches what is actually highlighted on screen.
+                std::string desc;
+                int visible_index = 0;
+                for (const auto& item : group.items)
+                {
+                    if (!item.visible_when_key.empty() &&
+                        hal->settings()->getString(group.nvs_namespace, item.visible_when_key) != item.visible_when_value)
+                        continue;
+                    if (visible_index == selected_item)
+                    {
+                        desc = item.hint;
+                        break;
+                    }
+                    visible_index++;
+                }
                 // No info, use current desc
                 if (desc.length() == 0)
                 {
@@ -338,6 +379,12 @@ namespace UTILS
                 // int y_offset = ITEMS_Y_OFFSET;
                 int max_visible_lines = (hal->canvas()->height() - ITEMS_Y_OFFSET - HINT_HEIGHT) / line_height;
 
+                auto visible_items = get_visible_items(hal, group);
+                // Keep selection within the currently visible range (the list can shrink/grow
+                // when a controlling setting like the modem preset changes).
+                if (selected_item > (int)visible_items.size() - 1)
+                    selected_item = std::max(0, (int)visible_items.size() - 1);
+
                 hal->keyboard()->updateKeyList();
                 hal->keyboard()->updateKeysState();
 
@@ -349,7 +396,7 @@ namespace UTILS
                     {
                         if (key_repeat_check(is_repeat, next_fire_ts, now))
                         {
-                            if (selected_item < group.items.size() - 1)
+                            if (selected_item < (int)visible_items.size() - 1)
                             {
                                 hal->playNextSound();
                                 selected_item++;
@@ -396,14 +443,14 @@ namespace UTILS
                     {
                         if (key_repeat_check(is_repeat, next_fire_ts, now))
                         {
-                            if (selected_item < group.items.size() - 1)
+                            if (selected_item < (int)visible_items.size() - 1)
                             {
                                 hal->playNextSound();
                                 // Jump down by visible_items count (page down)
                                 int jump = max_visible_lines;
-                                selected_item = std::min((int)group.items.size() - 1, selected_item + jump);
+                                selected_item = std::min((int)visible_items.size() - 1, selected_item + jump);
                                 scroll_offset =
-                                    std::min(std::max(0, (int)group.items.size() - max_visible_lines), selected_item);
+                                    std::min(std::max(0, (int)visible_items.size() - max_visible_lines), selected_item);
                                 selection_changed = true;
                             }
                         }
@@ -437,7 +484,9 @@ namespace UTILS
                         hal->playNextSound();
                         hal->keyboard()->waitForRelease(KEY_NUM_ENTER);
 
-                        auto& item = group.items[selected_item];
+                        if (visible_items.empty())
+                            return selection_changed;
+                        auto& item = *visible_items[selected_item];
 
                         if (item.type == SETTINGS::TYPE_NONE)
                         {

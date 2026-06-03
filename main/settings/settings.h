@@ -40,6 +40,11 @@ namespace SETTINGS
         std::string max_val; // For TYPE_NUMBER
         std::string hint;
         std::function<void(SettingItem_t& item)> callback;
+        // Optional conditional visibility: item is only shown when the item identified by
+        // visible_when_key (in the same group) currently equals visible_when_value.
+        // Leave visible_when_key empty to always show the item.
+        std::string visible_when_key;
+        std::string visible_when_value;
     };
 
     struct SettingGroup_t
