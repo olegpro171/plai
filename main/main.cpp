@@ -1,7 +1,7 @@
 /**
  * @file cardputer.cpp
  * @author d4rkmen
- * @brief Meshtastic client application for M5Stack CardPuter
+ * @brief Meshtastic client application for M5Stack Cardputer
  * @version 2.0
  * @date 2025-01-03
  *

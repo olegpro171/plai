@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    One-command build & flash for the Plai firmware (ESP-IDF 5.5.x / esp32s3 / M5Stack CardPuter).
+    One-command build & flash for the Plai firmware (ESP-IDF 5.5.x / esp32s3 / M5Stack Cardputer).
 
 .DESCRIPTION
     Run `.\flash.ps1` and the firmware ends up on the device. The script is idempotent:
@@ -84,7 +84,7 @@ function Assert-Exit {
 
 function Show-Help {
 @"
-flash.ps1 - one-command build & flash for Plai (ESP-IDF / esp32s3 / M5Stack CardPuter)
+flash.ps1 - one-command build & flash for Plai (ESP-IDF / esp32s3 / M5Stack Cardputer)
 
 USAGE
   .\flash.ps1 [options]
@@ -479,7 +479,7 @@ function Resolve-Port {
     if ($ports.Count -eq 0) {
         throw @"
 No ESP32-S3 (USB VID 303A) serial device found.
- - Plug the CardPuter into USB-C with a DATA cable (not charge-only).
+ - Plug the Cardputer into USB-C with a DATA cable (not charge-only).
  - Close any serial monitor / app that may be holding the port.
  - Or specify it explicitly:  .\flash.ps1 -Port COM4
 "@

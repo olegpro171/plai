@@ -1,6 +1,6 @@
 # Plai
 
-**A standalone Meshtastic communicator for M5Stack CardPuter**
+**A standalone Meshtastic communicator for M5Stack Cardputer**
 
 > _Plai_ is the Ukrainian word for a mountain trail — a reliable path for your data to travel when you're off the beaten track.
 
@@ -12,7 +12,7 @@
 > - **Enable/disable layouts** in **Settings → Keyboard** — [OPT] cycles only the layouts you keep on (English is always on).
 >
 > **Apps & power**
-> - **[Charge app](#charge)** — a one-way low-power charging screen: stops the LoRa radio, parks the GPS in standby, drops the CPU to 80 MHz and dims the backlight, so the CardPuter actually charges while idle (restart to exit).
+> - **[Charge app](#charge)** — a one-way low-power charging screen: stops the LoRa radio, parks the GPS in standby, drops the CPU to 80 MHz and dims the backlight, so the Cardputer actually charges while idle (restart to exit).
 > - **Accurate battery percentage** — battery % is interpolated across the LiPo discharge curve (0–100 %) with multi-sample ADC averaging, instead of upstream's coarse 0 / 25 / 50 / 75 / 100 buckets.
 > - **Power & reliability fixes** — the mesh TX/RX queues are flushed when the service stops (so display sleep truly idles instead of busy-polling), the GPS is woken from a persisted standby on boot, and the neighbor-info broadcast default is applied correctly.
 >
@@ -33,7 +33,7 @@
   <a href="https://youtu.be/2kFs07OOl1w">Watch the demo video</a>
 </p>
 
-Most Meshtastic nodes rely on a phone via BLE or WiFi. Plai takes a different approach: it turns the CardPuter into a **self-contained messaging terminal**. No phone required — just you, the LoRa CAP, and the keyboard.
+Most Meshtastic nodes rely on a phone via BLE or WiFi. Plai takes a different approach: it turns the Cardputer into a **self-contained messaging terminal**. No phone required — just you, the LoRa CAP, and the keyboard.
 
 ## Why Plai?
 
@@ -445,7 +445,7 @@ Node database and chat history are stored on SD card and not affected by firmwar
 
 ### Charge
 
-A low-power charging screen. Plai normally runs the radio, GPS and CPU at full tilt, so the CardPuter charges slowly while in use. Open **Charge** from the launcher to minimise draw: it stops the LoRa radio, puts the GPS into standby, drops the CPU to 80 MHz and dims the screen, showing battery %/voltage. It is **one-way** — restart the device to exit (a fresh boot restores everything).
+A low-power charging screen. Plai normally runs the radio, GPS and CPU at full tilt, so the Cardputer charges slowly while in use. Open **Charge** from the launcher to minimise draw: it stops the LoRa radio, puts the GPS into standby, drops the CPU to 80 MHz and dims the screen, showing battery %/voltage. It is **one-way** — restart the device to exit (a fresh boot restores everything).
 
 ## Hardware
 
@@ -453,7 +453,7 @@ A low-power charging screen. Plai normally runs the radio, GPS and CPU at full t
 
 | Component                 | Description                              |
 | ------------------------- | ---------------------------------------- |
-| **M5Stack CardPuter ADV** | ESP32-S3 portable terminal with keyboard |
+| **M5Stack Cardputer ADV** | ESP32-S3 portable terminal with keyboard |
 | **LoRa CAP**              | M5Stack SX1262 LoRa module (868/915 MHz) |
 | **SD Card**               | For profile, messages, and node database |
 
@@ -514,7 +514,7 @@ Built from scratch on ESP-IDF — not a fork of the Meshtastic firmware.
 ```
 
 `flash.ps1` performs any missing one-time setup (it generates the nanopb protobuf code, which
-is *not* committed), activates ESP-IDF, builds, auto-detects the CardPuter's COM port, and
+is *not* committed), activates ESP-IDF, builds, auto-detects the Cardputer's COM port, and
 flashes — warning you first before it resets the device's saved keys. Useful flags:
 
 | Flag       | Effect                                                          |

@@ -1364,7 +1364,7 @@ static const char* _hw_model_name(meshtastic_HardwareModel model)
     case meshtastic_HardwareModel_M5STACK_C6L:
         return "M5Stack C6L";
     case meshtastic_HardwareModel_M5STACK_CARDPUTER_ADV:
-        return "CardPuter+";
+        return "Cardputer+";
     case meshtastic_HardwareModel_HELTEC_WIRELESS_TRACKER_V2:
         return "Heltec Trk V2";
     case meshtastic_HardwareModel_T_WATCH_ULTRA:

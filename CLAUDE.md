@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Plai** is firmware for a standalone Meshtastic communicator on the M5Stack CardPuter (ESP32-S3) — a phone-free LoRa mesh messaging terminal. The mesh stack is **built from scratch on ESP-IDF, not a fork of the Meshtastic firmware**, but is wire-compatible with Meshtastic v2.7+ by encoding packets with the official Meshtastic protobufs (via Nanopb). Licensed GPL v3.
+**Plai** is firmware for a standalone Meshtastic communicator on the M5Stack Cardputer (ESP32-S3) — a phone-free LoRa mesh messaging terminal. The mesh stack is **built from scratch on ESP-IDF, not a fork of the Meshtastic firmware**, but is wire-compatible with Meshtastic v2.7+ by encoding packets with the official Meshtastic protobufs (via Nanopb). Licensed GPL v3.
 
 ## Build, Flash, Develop
 
