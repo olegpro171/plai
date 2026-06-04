@@ -1,36 +1,57 @@
 #!/usr/bin/env python3
 """
-Convert a PNG into a Plai launcher app-icon header.
+Convert a PNG into a Plai icon header (byte-swapped RGB565 C array).
 
-Launcher icons are 56x56, RGB565, stored BYTE-SWAPPED (big-endian) to match the
-ST7789 / LovyanGFX panel, with 0x8631 as the transparent color key. This script
-handles all of that for you:
-  - PNG alpha (below the threshold) -> 0x8631 transparent key
-  - opaque pixels  -> byte-swapped RGB565
+Works for ANY icon in the firmware, not just launcher app icons: 56x56 launcher
+icons, the 12x12 status/list glyphs (chat, pos_*, trace_*, key_*, stat_*), the
+non-square battery icon, etc. All Plai icons share one on-air format:
 
-Author a 56x56 PNG with a transparent background (non-56x56 input is resized
-NEAREST so pixel art stays crisp). Requires Pillow:  pip install pillow
+  * RGB565, stored BYTE-SWAPPED (big-endian) to match the ST7789 / LovyanGFX
+    panel. A plain little-endian converter swaps blue<->green and noises up edges.
+  * an optional transparent color key passed to pushImage() at the call site.
+    The two keys actually used in this codebase are:
+       0x8631  launcher / "big" icons   (the dark theme background, swapped)
+       0xFFFF  small UI glyphs          (TFT_WHITE; chat, pos_*, sound_off, pwr)
+    A few icons (battery, stat_*) are drawn opaque with no key at all.
+
+This script handles the byte-swap and the color key for you:
+  * PNG alpha below the threshold      -> the chosen color key (transparent)
+  * opaque pixels                      -> byte-swapped RGB565
+  * an opaque pixel that happens to equal the key is nudged by 1 LSB so it
+    never accidentally turns transparent on device.
+
+Requires Pillow:  pip install pillow
 
 Usage:
-    python scripts/png_to_icon.py <icon.png> [--out <header.h>] [--var <name>]
+    # Simplest: writes <png>.h next to the PNG, array name image_data_<png-stem>,
+    # size taken from the PNG, default key 0x8631.
+    python scripts/png_to_icon.py my_icon.png
 
-Defaults target the charge app:
-    --out  main/apps/app_charge/assets/app_charge.h
-    --var  image_data_app_charge
+    # An app launcher icon (explicit destination + array name):
+    python scripts/png_to_icon.py nodes.png \
+        --out main/apps/app_nodes/assets/app_nodes.h --var image_data_app_nodes
 
-To use the icon, the app packer's getAppIcon() must reference <var>, e.g.:
+    # A 12x12 white-keyed status glyph:
+    python scripts/png_to_icon.py chat.png --out main/apps/app_nodes/assets/chat.h \
+        --key 0xFFFF
+
+    # An opaque icon (no transparency), forced to 32x16:
+    python scripts/png_to_icon.py bat.png --width 32 --height 16 --key none
+
+The C array name must match what the app references, e.g. for a launcher icon:
     void* getAppIcon() override { return (void*)(new AppIcon_t(image_data_app_xxx, nullptr)); }
+or for a glyph drawn directly:
+    canvas->pushImage(x, y, w, h, image_data_xxx, 0xFFFF);   // key must match --key
 """
 import argparse
 import os
 from PIL import Image
 
-SIZE = 56
-TRANSPARENT = 0x8631      # color key (matched on the raw stored value, never swapped)
-ALPHA_THRESHOLD = 128
+DEFAULT_KEY = 0x8631      # launcher-icon color key; matched on the raw stored value
+ALPHA_THRESHOLD = 128     # PNG alpha below this becomes transparent
 
 # This file lives in scripts/. Resolve default paths relative to the repo root so
-# the tool writes to the right place no matter which directory it is run from.
+# the tool behaves the same no matter which directory it is run from.
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -39,46 +60,96 @@ def rgb565(r, g, b):
 
 
 def store(v):
-    """Byte-swap so the panel renders the intended color."""
+    """Byte-swap a 16-bit value so the panel renders the intended color."""
     return ((v & 0xFF) << 8) | (v >> 8)
 
 
-def convert(png_path, out_path, var):
+def parse_key(s):
+    """Parse --key: a hex value (with or without 0x), or none/opaque -> None."""
+    if s is None:
+        return DEFAULT_KEY
+    s = s.strip().lower()
+    if s in ("none", "opaque", "-1", ""):
+        return None
+    return int(s, 16)
+
+
+def parse_bg(s):
+    """Parse --bg 'R,G,B' (0-255 each) used to flatten alpha when --key none."""
+    parts = [int(p, 0) for p in s.split(",")]
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError("--bg must be R,G,B (e.g. 0,0,0)")
+    return tuple(max(0, min(255, p)) for p in parts)
+
+
+def convert(png_path, out_path, var, name, width, height, key, bg):
     img = Image.open(png_path).convert("RGBA")
-    if img.size != (SIZE, SIZE):
-        print(f"note: resizing {img.size} -> {SIZE}x{SIZE} (NEAREST)")
-        img = img.resize((SIZE, SIZE), Image.NEAREST)
+    w = width or img.width
+    h = height or img.height
+    if img.size != (w, h):
+        print(f"note: resizing {img.size} -> {w}x{h} (NEAREST)")
+        img = img.resize((w, h), Image.NEAREST)
     px = img.load()
+
     vals = []
-    for y in range(SIZE):
-        for x in range(SIZE):
+    for y in range(h):
+        for x in range(w):
             r, g, b, a = px[x, y]
-            if a < ALPHA_THRESHOLD:
-                vals.append(TRANSPARENT)
+            if key is not None and a < ALPHA_THRESHOLD:
+                vals.append(key)                       # transparent -> color key
             else:
+                if key is None and a < 255:             # opaque output: flatten alpha over bg
+                    r = (r * a + bg[0] * (255 - a)) // 255
+                    g = (g * a + bg[1] * (255 - a)) // 255
+                    b = (b * a + bg[2] * (255 - a)) // 255
                 s = store(rgb565(r, g, b))
-                vals.append(s ^ 1 if s == TRANSPARENT else s)  # never collide with the key
+                if key is not None and s == key:
+                    s ^= 1                              # never collide with the key
+                vals.append(s)
+
+    keytxt = "opaque, no color key" if key is None else f"key 0x{key:04X}"
     lines = [
+        "#pragma once",
         "",
-        f"/* Auto-generated app icon ({SIZE}x{SIZE}, byte-swapped RGB565, key 0x8631). */",
+        "/* Auto-generated by scripts/png_to_icon.py",
+        f" * {w}x{h}, byte-swapped RGB565 (big-endian, ST7789 / LovyanGFX panel), {keytxt}.",
+        " */",
         "#include <stdint.h>",
         "",
-        f"static const uint16_t {var}[{SIZE * SIZE}] = {{",
+        f"static const uint16_t {var}[{w * h}] = {{",
     ]
-    for y in range(SIZE):
-        lines.append("    " + ",".join(f"0x{v:04X}" for v in vals[y * SIZE:(y + 1) * SIZE]) + ",")
-    lines += ["};", ""]
+    for y in range(h):
+        row = vals[y * w:(y + 1) * w]
+        lines.append("    " + ",".join(f"0x{v:04X}" for v in row) + ",")
+    lines += [
+        "};",
+        "",
+        f"// const tImage {name} = {{ {var}, {w}, {h}, 16 }};",
+        "",
+    ]
+
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
-    print(f"wrote {out_path}  ({var})")
+    print(f"wrote {out_path}  ({var}, {w}x{h}, {keytxt})")
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="PNG -> Plai app-icon header (byte-swapped RGB565)")
-    ap.add_argument("png", help="source PNG (ideally 56x56 with a transparent background)")
-    ap.add_argument("--out", default=os.path.join(REPO, "main", "apps", "app_charge", "assets", "app_charge.h"),
-                    help="output header path")
-    ap.add_argument("--var", default="image_data_app_charge", help="C array name")
+    ap = argparse.ArgumentParser(
+        description="PNG -> Plai icon header (byte-swapped RGB565)",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("png", help="source PNG (RGBA; transparent background for keyed icons)")
+    ap.add_argument("--out", help="output header path (default: <png>.h next to the PNG)")
+    ap.add_argument("--var", help="C array name (default: image_data_<out-stem>)")
+    ap.add_argument("--width", type=int, help="target width  (default: PNG width)")
+    ap.add_argument("--height", type=int, help="target height (default: PNG height)")
+    ap.add_argument("--key", help="transparent color key in hex, or 'none' for opaque "
+                                  f"(default: 0x{DEFAULT_KEY:04X})")
+    ap.add_argument("--bg", type=parse_bg, default=(0, 0, 0),
+                    help="R,G,B to flatten alpha over when --key none (default: 0,0,0)")
     args = ap.parse_args()
-    convert(args.png, args.out, args.var)
+
+    out = args.out or (os.path.splitext(args.png)[0] + ".h")
+    stem = os.path.splitext(os.path.basename(out))[0]
+    var = args.var or f"image_data_{stem}"
+    convert(args.png, out, var, stem, args.width, args.height, parse_key(args.key), args.bg)
