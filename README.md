@@ -504,6 +504,25 @@ Built from scratch on ESP-IDF — not a fork of the Meshtastic firmware.
 
 - [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32s3/get-started/) (project tested with **5.5.4**)
 - ESP32-S3 target
+- Python 3 — used to generate the protobuf sources (`flash.ps1` and the manual path set up an isolated venv with the bundled Nanopb generator)
+
+### Clone
+
+The Meshtastic `.proto` definitions are included as a git submodule in `protobufs/`, so clone recursively:
+
+```bash
+git clone --recursive https://github.com/olegpro171/plai
+```
+
+If you already cloned without `--recursive`, pull the submodule in:
+
+```bash
+git submodule update --init --recursive
+```
+
+### Configure
+
+Project-wide, target-agnostic configuration lives in `sdkconfig.defaults` and is applied automatically on the first build, so the generated `sdkconfig` always matches the intended setup. As the project moves toward multiple targets, keep shared custom options in `sdkconfig.defaults`; any target-specific overrides belong in `sdkconfig.defaults.<target>` (e.g. `sdkconfig.defaults.esp32s3`).
 
 ### Build & Flash
 
@@ -513,9 +532,10 @@ Built from scratch on ESP-IDF — not a fork of the Meshtastic firmware.
 .\flash.ps1
 ```
 
-`flash.ps1` performs any missing one-time setup (it generates the nanopb protobuf code, which
-is *not* committed), activates ESP-IDF, builds, auto-detects the Cardputer's COM port, and
-flashes — warning you first before it resets the device's saved keys. Useful flags:
+`flash.ps1` performs any missing one-time setup (it initializes the `protobufs/` submodule and
+generates the nanopb protobuf code, which is *not* committed), activates ESP-IDF, builds,
+auto-detects the Cardputer's COM port, and flashes — warning you first before it resets the
+device's saved keys. Useful flags:
 
 | Flag       | Effect                                                          |
 | ---------- | --------------------------------------------------------------- |
@@ -531,11 +551,14 @@ flashes — warning you first before it resets the device's saved keys. Useful f
 
 **Manual / other platforms.** The committed `sdkconfig` already targets `esp32s3`, so **do not
 run `idf.py set-target`** — it regenerates `sdkconfig` from defaults and wipes the tuned config.
-Generate the protobuf code once before the first build (this is what `flash.ps1` automates):
+The Nanopb sources under `main/meshtastic/` are generated from the `protobufs/` submodule and are
+*not* committed, so generate them once before the first build (this is what `flash.ps1` automates):
 
 ```bash
-# one-time: fetch proto sources and generate the nanopb code (gitignored, not committed)
-git clone --depth 1 https://github.com/meshtastic/protobufs.git protobufs
+# fetch the proto sources (skip if you cloned with --recursive)
+git submodule update --init --recursive
+
+# generate the nanopb code (gitignored, not committed)
 python -m venv .protovenv && .protovenv/bin/pip install grpcio-tools
 .protovenv/bin/python components/Nanopb/generator/nanopb_generator.py \
     -S .cpp -I protobufs -D main protobufs/meshtastic/*.proto
@@ -593,11 +616,12 @@ Plai/
 │   │   ├── node_db.*          # Node database (SD-backed)
 │   │   ├── mesh_data.*        # Message store & packet log
 │   │   └── packet_router.*    # Priority TX/RX queues
-│   ├── meshtastic/            # Protobuf definitions (Nanopb)
+│   ├── meshtastic/            # Generated Nanopb sources (from protobufs/, git-ignored)
 │   ├── settings/              # NVS settings with cache
 │   └── main.cpp               # Entry point
 ├── map/
 │   └── download_osm_tiles.py  # OSM tile downloader for offline map
+├── protobufs/                 # Meshtastic .proto definitions (git submodule)
 ├── scripts/
 │   ├── png_to_icon.py         # PNG -> app-icon header (byte-swapped RGB565)
 │   └── icons_to_png.py        # decode app icons back to PNG
@@ -605,6 +629,7 @@ Plai/
 │   ├── LovyanGFX/             # Display graphics library
 │   ├── mooncake/              # App framework
 │   └── Nanopb/                # Protocol Buffers
+├── sdkconfig.defaults         # Project-wide build configuration
 └── Kconfig.projbuild          # menuconfig HAL options
 ```
 

@@ -4,8 +4,8 @@
 
 .DESCRIPTION
     Run `.\flash.ps1` and the firmware ends up on the device. The script is idempotent:
-    it performs any missing one-time setup (clone Meshtastic protobufs, create the nanopb
-    generator venv, generate the protobuf code), activates the ESP-IDF environment, builds,
+    it performs any missing one-time setup (init the Meshtastic protobufs submodule, create the
+    nanopb generator venv, generate the protobuf code), activates the ESP-IDF environment, builds,
     auto-detects the device's COM port, warns before it wipes the NVS mesh keys, then flashes.
 
     See the "Building from Source" section of README.md for the manual steps this automates.
@@ -378,19 +378,30 @@ function Ensure-Protos {
     $venvDir   = Join-Path $RepoRoot 'tools\protovenv'
     $venvPy    = Join-Path $venvDir 'Scripts\python.exe'
 
-    # 1. Proto sources (the .gitmodules submodule is broken; clone directly).
+    # 1. Proto sources. protobufs/ is a git submodule (see .gitmodules); initialize it when the
+    #    .proto inputs are missing. Falls back to a direct clone for non-git checkouts (e.g. ZIP).
     $protoFiles = @(Get-ChildItem -Path $protoGlob -ErrorAction SilentlyContinue)
     if ($protoFiles.Count -eq 0) {
-        if (Test-Path $protoDir) {
-            throw "protobufs\ exists but has no meshtastic\*.proto. Delete protobufs\ and re-run."
-        }
         if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-            throw "git not found on PATH; it's needed to clone the Meshtastic protobufs."
+            throw "git not found on PATH; it's needed to fetch the Meshtastic protobufs."
         }
-        Step "Cloning Meshtastic protobufs"
-        git clone --depth 1 $ProtobufsUrl $protoDir
-        Assert-Exit "git clone protobufs"
-        $protoFiles = @(Get-ChildItem -Path $protoGlob -ErrorAction SilentlyContinue)
+        if (Test-Path (Join-Path $RepoRoot '.git')) {
+            Step "Initializing Meshtastic protobufs submodule"
+            git -C $RepoRoot submodule update --init --recursive protobufs
+            Assert-Exit "git submodule update --init protobufs"
+            $protoFiles = @(Get-ChildItem -Path $protoGlob -ErrorAction SilentlyContinue)
+        }
+        if ($protoFiles.Count -eq 0) {
+            # Submodule init produced nothing (non-git checkout) — clone directly into an empty dir.
+            if ((Test-Path $protoDir) -and (Get-ChildItem -Path $protoDir -Force -ErrorAction SilentlyContinue)) {
+                throw "protobufs\ exists but has no meshtastic\*.proto. Delete protobufs\ and re-run."
+            }
+            if (Test-Path $protoDir) { Remove-Item -Path $protoDir -Recurse -Force -ErrorAction SilentlyContinue }
+            Step "Cloning Meshtastic protobufs"
+            git clone --depth 1 $ProtobufsUrl $protoDir
+            Assert-Exit "git clone protobufs"
+            $protoFiles = @(Get-ChildItem -Path $protoGlob -ErrorAction SilentlyContinue)
+        }
     }
     else {
         Detail "Proto sources present ($($protoFiles.Count) .proto files)."
@@ -604,7 +615,7 @@ try {
         }
     }
     # On a clean machine git may not be on PATH; use the one EIM bundled (from the manifest) so the
-    # protobuf clone and idf.py's component manager can run.
+    # protobuf submodule init and idf.py's component manager can run.
     if (-not (Get-Command git -ErrorAction SilentlyContinue) -and
         $script:IdfInstall -and $script:IdfInstall.GitPath -and (Test-Path $script:IdfInstall.GitPath)) {
         $env:PATH = "$(Split-Path -Parent $script:IdfInstall.GitPath);$env:PATH"

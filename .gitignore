@@ -6,7 +6,6 @@ docs
 archive
 main/meshtastic/*
 tools
-protobufs
 
 # generated icon exports (scripts/icons_to_png.py)
 icon_export

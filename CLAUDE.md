@@ -16,7 +16,8 @@ ESP-IDF **v5.5.4** (target `esp32s3`) is required. There is no host test framewo
 
 # Manual / other platforms. main/meshtastic/ is generated & gitignored — generate it once
 # first (see "Protobufs" below). The committed sdkconfig already targets esp32s3, so do NOT
-# run `idf.py set-target` (it regenerates sdkconfig from defaults and wipes the tuned config).
+# run `idf.py set-target` (it regenerates sdkconfig and can wipe tuned settings). Shared
+# build-config deltas are tracked in sdkconfig.defaults (auto-applied on a fresh build).
 idf.py build
 idf.py -p <PORT> flash monitor       # e.g. -p /dev/cu.usbmodem* on macOS
 
@@ -71,7 +72,7 @@ Apps present: `launcher`, `app_settings`, `app_nodes`, `app_channels`, `app_moni
 **Persistence split (important):** mesh keys and device config live in **NVS** and are wiped by a firmware reflash unless exported to SD first. The node database and chat history live on the **SD card** (`/sdcard/meshtastic/`) and survive firmware updates. SD layout includes `nodes/`, `messages/`, `traceroute/`, `neighbors/`, plus `prefs.pb`, `channels.pb`, `favorites.dat`, `ignorelist.dat`, `templates.txt`; emoji at `/sdcard/emoji/u<HEX>.png` and map tiles at `/sdcard/map/<style>/{z}/{x}/{y}.jpg`.
 
 ### Protobufs (`main/meshtastic/`) — generated, gitignored
-The Nanopb-generated C sources in `main/meshtastic/` are **not checked in** (gitignored) and **must be generated before the first build**. They come from the `meshtastic/protobufs` repo, cloned into `protobufs/` (the `.gitmodules` submodule is not wired up, so clone it directly). On Windows, [flash.ps1](flash.ps1) generates them automatically (force a refresh with `.\flash.ps1 -Regen`); under the hood it runs the bundled Nanopb generator: `nanopb_generator.py -S .cpp -I protobufs -D main protobufs/meshtastic/*.proto`. This generated layer is what provides Meshtastic wire compatibility.
+The Nanopb-generated C sources in `main/meshtastic/` are **not checked in** (gitignored) and **must be generated before the first build**. They are generated from the `.proto` files in `protobufs/`, which is a **git submodule** pinned to `meshtastic/protobufs` (clone with `git clone --recursive`, or run `git submodule update --init` after a plain clone). On Windows, [flash.ps1](flash.ps1) initializes the submodule and generates the sources automatically (force a refresh with `.\flash.ps1 -Regen`); under the hood it runs the bundled Nanopb generator: `nanopb_generator.py -S .cpp -I protobufs -D main protobufs/meshtastic/*.proto`. This generated layer is what provides Meshtastic wire compatibility.
 
 ## Conventions
 
